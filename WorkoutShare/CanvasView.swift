@@ -104,17 +104,14 @@ struct CanvasView: View {
 
             GeometryReader { geometry in
                 VStack(alignment: textAlignment, spacing: 0) {
-                    Text(workoutType.displayName.uppercased())
-                        .font(applyFont(baseSize: baseLabelCaptionSize * 0.9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
-                        .padding(.bottom, 4)
-
-                    Text(workout.name)
-                        .font(applyFont(baseSize: 17.0, weight: .bold))
-                        .foregroundColor(.white)
-                        .shadow(radius: 2)
-                        .lineLimit(2)
-                        .multilineTextAlignment(textAlign)
+                    VStack(alignment: textAlignment, spacing: 0) {
+                        Text(workoutType.displayName.uppercased())
+                            .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                            .foregroundColor(.white.opacity(0.8))
+                        Text(workout.name)
+                            .font(applyFont(baseSize: 17.0, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
 
                     Spacer().frame(height: 4)
 
