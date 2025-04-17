@@ -8,6 +8,7 @@ struct StravaWorkout: Codable, Identifiable {
     let type: String // Strava에서 원래 오는 타입 문자열
     let startDate: Date
     let totalElevationGain: Double? // 상승 고도 (meters)
+    let kilojoules: Double? // <<<--- 추가된 프로퍼티
 
     // 거리 포맷 (km)
     var formattedDistance: String {
@@ -55,6 +56,18 @@ struct StravaWorkout: Codable, Identifiable {
         return String(format: "%.0f m", elevation) // 정수로 표시
     }
 
+    // <<<--- 추가된 칼로리 계산 및 포맷 프로퍼티 ---<<<
+    var formattedCalories: String {
+        // kilojoules 값이 있는지, 0보다 큰지 확인
+        guard let kj = kilojoules, kj > 0 else { return "- kcal" } // 데이터 없으면 "-" 표시
+        // 1 kcal ≈ 4.184 kJ 를 사용하여 변환
+        let kcal = kj / 4.184
+        // 소수점 없이 정수로 표시
+        return String(format: "%.0f kcal", kcal)
+    }
+    // >>>------------------------------------------>>>
+
+
     // JSON 디코딩을 위한 키 매핑
     enum CodingKeys: String, CodingKey {
         case id
@@ -63,7 +76,8 @@ struct StravaWorkout: Codable, Identifiable {
         case movingTime = "moving_time"
         case type // Strava의 원래 type 필드
         case startDate = "start_date"
-        case totalElevationGain = "total_elevation_gain" // API 필드 이름과 매핑
+        case totalElevationGain = "total_elevation_gain"
+        case kilojoules // <<<--- 추가된 키 매핑
     }
 
     // (선택 사항) Strava 'type' 문자열을 WorkoutType enum으로 변환하는 로직

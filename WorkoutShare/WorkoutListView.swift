@@ -50,8 +50,8 @@ struct WorkoutListView: View {
 #Preview {
     NavigationView { // 프리뷰에서 네비게이션 바 보이도록
         WorkoutListView(workouts: [
-            StravaWorkout(id: 1, name: "Morning Run", distance: 5000, movingTime: 1800, type: "Run", startDate: Date().addingTimeInterval(-86400), totalElevationGain: 50),
-            StravaWorkout(id: 2, name: "Evening Walk", distance: 3000, movingTime: 2400, type: "Walk", startDate: Date(), totalElevationGain: 10)
+            StravaWorkout(id: 1, name: "Morning Run", distance: 5000, movingTime: 1800, type: "Run", startDate: Date().addingTimeInterval(-86400), totalElevationGain: 50, kilojoules: 1500.0),
+            StravaWorkout(id: 2, name: "Evening Walk", distance: 3000, movingTime: 2400, type: "Walk", startDate: Date(), totalElevationGain: 10, kilojoules: 1500.0)
         ])
         .navigationTitle("Sample Workouts")
     }

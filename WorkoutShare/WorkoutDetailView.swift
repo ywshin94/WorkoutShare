@@ -254,7 +254,7 @@ struct WorkoutDetailView: View {
     NavigationView {
         WorkoutDetailView(
             workout: StravaWorkout(
-                id: 1, name: "Afternoon Jog", distance: 5230.0, movingTime: 1950, type: "Run", startDate: Date().addingTimeInterval(-3600 * 24), totalElevationGain: 25.5
+                id: 1, name: "Afternoon Jog", distance: 5230.0, movingTime: 1950, type: "Run", startDate: Date().addingTimeInterval(-3600 * 24), totalElevationGain: 25.5, kilojoules: 1500.0
             )
         )
     }
