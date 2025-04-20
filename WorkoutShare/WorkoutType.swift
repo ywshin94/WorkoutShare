@@ -56,7 +56,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
             return false
         }
     }
-    
+
     var showsDistance: Bool {
         switch self {
         case .none, .weight:
@@ -65,4 +65,19 @@ enum WorkoutType: String, CaseIterable, Identifiable {
             return true
         }
     }
+
+    static func fromStravaType(_ stravaType: String) -> WorkoutType {
+        switch stravaType.lowercased() {
+        case "run": return .run
+        case "walk": return .walk
+        case "hike": return .hike
+        case "trail run": return .trailRun
+        case "treadmill": return .treadmill
+        case "weighttraining", "weight": return .weight
+        default:
+            print("⚠️ 예상치 못한 타입: \(stravaType)")
+            return .run
+        }
+    }
 }
+
