@@ -1,3 +1,5 @@
+// CanvasView.swift — ✅ .drawingGroup() 추가로 aliasing 제거 & GPU offload
+
 import SwiftUI
 
 struct CanvasView: View {
@@ -10,9 +12,8 @@ struct CanvasView: View {
     let textAlignment: HorizontalAlignment
     let workoutType: WorkoutType
     let selectedFontName: String
-    let baseFontSize: CGFloat // 폰트 크기 조절용
+    let baseFontSize: CGFloat
 
-    // 드래그 관련 상태
     @Binding var accumulatedOffset: CGSize
     @State private var currentDragOffset: CGSize = .zero
     @State private var textSize: CGSize = .zero
@@ -22,7 +23,6 @@ struct CanvasView: View {
     private let baseLabelFootnoteSize: CGFloat = 13.0
     private let baseLabelCaptionSize: CGFloat = 12.0
 
-    // MARK: - Computed Properties
     private var canvasWidth: CGFloat {
         let screenWidth = UIScreen.main.bounds.width
         return min(screenWidth - 40, 350)
@@ -40,7 +40,6 @@ struct CanvasView: View {
         }
     }
 
-    // MARK: - Gestures
     var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -63,26 +62,23 @@ struct CanvasView: View {
             }
     }
 
-    // MARK: - Helper Functions
     private func clampOffset(potentialOffset: CGSize) -> CGSize {
         let textHalfWidth = textSize.width / 2
         let textHalfHeight = textSize.height / 2
         let canvasHalfWidth = canvasWidth / 2
         let canvasHalfHeight = canvasHeight / 2
-        let currentBorderMargin = borderMargin
 
-        let maxX = canvasHalfWidth - textHalfWidth - currentBorderMargin
-        let minX = -canvasHalfWidth + textHalfWidth + currentBorderMargin
-        let maxY = canvasHalfHeight - textHalfHeight - currentBorderMargin
-        let minY = -canvasHalfHeight + textHalfHeight + currentBorderMargin
+        let maxX = canvasHalfWidth - textHalfWidth - borderMargin
+        let minX = -canvasHalfWidth + textHalfWidth + borderMargin
+        let maxY = canvasHalfHeight - textHalfHeight - borderMargin
+        let minY = -canvasHalfHeight + textHalfHeight + borderMargin
 
-        if textSize.width <= 0 || textSize.height <= 0 || textSize.width + 2 * currentBorderMargin > canvasWidth || textSize.height + 2 * currentBorderMargin > canvasHeight {
+        if textSize.width <= 0 || textSize.height <= 0 || textSize.width + 2 * borderMargin > canvasWidth || textSize.height + 2 * borderMargin > canvasHeight {
              return potentialOffset
         }
 
         return CGSize(width: max(minX, min(potentialOffset.width, maxX)), height: max(minY, min(potentialOffset.height, maxY)))
     }
-
 
     private func applyFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
         let scaledSize = max(1, baseSize * baseFontSize / 17.0)
@@ -94,10 +90,8 @@ struct CanvasView: View {
         }
     }
 
-    // MARK: - Body
     var body: some View {
         ZStack(alignment: .center) {
-            // 배경 설정
             if useImageBackground, let image = backgroundImage {
                 Image(uiImage: image)
                     .resizable()
@@ -111,9 +105,7 @@ struct CanvasView: View {
             }
 
             GeometryReader { geometry in
-                // 운동 정보 텍스트 블록
                 VStack(alignment: textAlignment, spacing: 0) {
-                    // 운동 종류 및 이름
                     VStack(alignment: textAlignment, spacing: 0) {
                         Text(workoutType.displayName.uppercased())
                             .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
@@ -123,7 +115,6 @@ struct CanvasView: View {
                             .foregroundColor(.white)
                     }
 
-                    // 거리
                     Spacer().frame(height: 4)
                     if workoutType.showsDistance {
                         VStack(alignment: textAlignment, spacing: 0) {
@@ -136,8 +127,6 @@ struct CanvasView: View {
                         }
                     }
 
-                    
-                    // 시간
                     Spacer().frame(height: 4)
                     VStack(alignment: textAlignment, spacing: 0) {
                         Text("시간")
@@ -148,7 +137,6 @@ struct CanvasView: View {
                             .foregroundColor(.white)
                     }
 
-                    // 페이스
                     if workoutType.showsPace {
                         Spacer().frame(height: 4)
                         VStack(alignment: textAlignment, spacing: 0) {
@@ -161,7 +149,6 @@ struct CanvasView: View {
                         }
                     }
 
-                    // 속도
                     if workoutType.showsSpeed {
                         Spacer().frame(height: 4)
                         VStack(alignment: textAlignment, spacing: 0) {
@@ -174,7 +161,6 @@ struct CanvasView: View {
                         }
                     }
 
-                    // 상승고도
                     if workoutType.showsElevation {
                         Spacer().frame(height: 4)
                         VStack(alignment: textAlignment, spacing: 0) {
@@ -186,11 +172,6 @@ struct CanvasView: View {
                                 .foregroundColor(.white)
                         }
                     }
-
-                    // <<<--- 칼로리 정보 표시 블록 삭제됨 ---<<<
-                    // if let kj = workout.kilojoules, kj > 0 { ... } 부분이 제거되었습니다.
-                    // >>>----------------------------------->>>
-
                 }
                 .padding(.horizontal, max(5, 15))
                 .padding(.vertical, max(5, 10))
@@ -201,7 +182,7 @@ struct CanvasView: View {
                                 self.textSize = textGeometry.size
                                 self.accumulatedOffset = clampOffset(potentialOffset: self.accumulatedOffset)
                             }
-                            .onChange(of: textGeometry.size) { oldSize, newSize in
+                            .onChange(of: textGeometry.size) { _, newSize in
                                 self.textSize = newSize
                                 self.accumulatedOffset = clampOffset(potentialOffset: self.accumulatedOffset)
                             }
@@ -215,26 +196,15 @@ struct CanvasView: View {
         }
         .frame(width: canvasWidth, height: canvasHeight)
         .clipped()
+        .drawingGroup() // ✅ GPU 렌더링 & aliasing 제거
         .onAppear {
             print("CanvasView loaded. Target Size: \(canvasWidth)x\(canvasHeight)")
         }
-        .onChange(of: selectedFontName) { oldFont, newFont in
-             if UIFont(name: newFont, size: 10) == nil {
-                 print("Warning: Selected font '\(newFont)' might not be available.")
-             }
-         }
+        .onChange(of: selectedFontName) { _, newFont in
+            if UIFont(name: newFont, size: 10) == nil {
+                print("Warning: Selected font '\(newFont)' might not be available.")
+            }
+        }
     }
 }
 
-// Preview 부분
-#Preview {
-    CanvasView(
-        workout: StravaWorkout(
-            id: 1, name: "Preview Hike", distance: 10000, movingTime: 7200, type: "Hike", startDate: Date(), totalElevationGain: 500, kilojoules: 2500
-        ),
-        useImageBackground: true, backgroundColor: .clear, backgroundImage: UIImage(systemName: "mountain.2.fill"),
-        aspectRatio: 1.0, textAlignment: .center, workoutType: .hike, selectedFontName: "Futura-Bold", // Preview에서도 기본값 반영
-        baseFontSize: 14.0, accumulatedOffset: .constant(CGSize(width: 10, height: -5)) // Preview에서도 기본값 반영
-    )
-    .padding()
-}
