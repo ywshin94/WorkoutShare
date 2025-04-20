@@ -18,7 +18,7 @@ struct WorkoutDetailView: View {
     @State private var selectedFontName: String = "Futura-Bold" // 기본값
     @State private var canvasOffset: CGSize = .zero
     // <<<--- 기본 폰트 크기 변경 ---<<<
-    @State private var baseFontSize: CGFloat = 14.0 // 13.0 에서 14.0 으로 변경
+    @State private var baseFontSize: CGFloat = 13.0 // 13.0 에서 14.0 으로 변경
     // >>>---------------------->>>
 
     // 사용 가능한 모든 폰트 이름 로드

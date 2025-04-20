@@ -2,11 +2,13 @@ import Foundation
 
 // 운동 종류 Enum 정의
 enum WorkoutType: String, CaseIterable, Identifiable {
+    case none = "None"
     case run = "Run" // Strava API 타입과 일치 고려
     case trailRun = "Trail Run"
     case treadmill = "Treadmill" // Strava에선 보통 "Run"
     case walk = "Walk"
     case hike = "Hike"
+    case weight = "Weight"      // ✨ 추가
     // 필요시 다른 타입 추가 (예: Ride, Swim 등)
 
     var id: String { self.rawValue } // Identifiable 준수
@@ -14,11 +16,13 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     // UI 표시용 한글 이름
     var displayName: String {
         switch self {
+        case .none: return ""
         case .run: return "러닝"
         case .trailRun: return "트레일러닝"
         case .treadmill: return "트레드밀"
         case .walk: return "걷기"
         case .hike: return "하이킹"
+        case .weight: return "보강운동"
         }
     }
 
@@ -28,7 +32,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         switch self {
         case .run, .trailRun, .treadmill:
             return true // 달리기 관련은 페이스 표시
-        case .walk, .hike:
+        default:
             return false
         }
     }
@@ -36,10 +40,10 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     // 속도(km/h) 표시 여부
     var showsSpeed: Bool {
         switch self {
-        case .run, .trailRun, .treadmill:
-            return false
         case .walk, .hike:
-            return true // 걷기/하이킹은 속도 표시
+            return true
+        default:
+            return false // 걷기/하이킹은 속도 표시
         }
     }
 
@@ -48,8 +52,17 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         switch self {
         case .trailRun, .hike:
             return true // 트레일러닝/하이킹은 상승고도 표시
-        case .run, .treadmill, .walk:
+        default:
             return false
+        }
+    }
+    
+    var showsDistance: Bool {
+        switch self {
+        case .none, .weight:
+            return false
+        default:
+            return true
         }
     }
 }

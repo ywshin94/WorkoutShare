@@ -123,21 +123,22 @@ struct CanvasView: View {
                             .foregroundColor(.white)
                     }
 
-                    Spacer().frame(height: 4)
-
                     // 거리
-                    VStack(alignment: textAlignment, spacing: 0) {
-                        Text("거리")
-                            .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text(workout.formattedDistance)
-                            .font(applyFont(baseSize: 17.0, weight: .semibold))
-                            .foregroundColor(.white)
+                    Spacer().frame(height: 4)
+                    if workoutType.showsDistance {
+                        VStack(alignment: textAlignment, spacing: 0) {
+                            Text("거리")
+                                .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                .foregroundColor(.white.opacity(0.8))
+                            Text(workout.formattedDistance)
+                                .font(applyFont(baseSize: 17.0, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
                     }
 
-                    Spacer().frame(height: 4)
-
+                    
                     // 시간
+                    Spacer().frame(height: 4)
                     VStack(alignment: textAlignment, spacing: 0) {
                         Text("시간")
                             .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
