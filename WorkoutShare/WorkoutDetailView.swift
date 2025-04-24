@@ -1,5 +1,35 @@
 import SwiftUI
 import PhotosUI
+import AVKit
+
+final class VideoPlayerManager: ObservableObject {
+    @Published var player: AVPlayer? = nil
+
+    func loadVideo(from url: URL) {
+        player?.pause()
+        let newPlayer = AVPlayer(url: url)
+        player = newPlayer
+
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: newPlayer.currentItem,
+            queue: .main
+        ) { [weak newPlayer] _ in
+            newPlayer?.seek(to: .zero)
+            newPlayer?.play()
+        }
+
+        newPlayer.play()
+    }
+
+    func pause() {
+        player?.pause()
+    }
+
+    func resume() {
+        player?.play()
+    }
+}
 
 struct WorkoutDetailView: View {
     let workout: StravaWorkout
@@ -18,6 +48,8 @@ struct WorkoutDetailView: View {
     @State private var baseFontSize: CGFloat = 13.0
     @State private var selectedVideoItem: PhotosPickerItem?
     @State private var selectedVideoURL: URL?
+    @State private var showVideoPreview: Bool = false
+    @StateObject private var videoPlayerManager = VideoPlayerManager()
 
     private static let allFontNames: [String] = {
         var names: [String] = []
@@ -28,18 +60,26 @@ struct WorkoutDetailView: View {
     }()
 
     private var displayedCanvasView: some View {
-        CanvasView(
-            workout: workout,
-            useImageBackground: useImageBackground,
-            backgroundColor: backgroundColor,
-            backgroundImage: backgroundImage,
-            aspectRatio: selectedAspectRatio.ratio,
-            textAlignment: selectedTextAlignment.horizontalAlignment,
-            workoutType: selectedWorkoutType,
-            selectedFontName: selectedFontName,
-            baseFontSize: baseFontSize,
-            accumulatedOffset: $canvasOffset
-        )
+        ZStack {
+            if showVideoPreview, let player = videoPlayerManager.player {
+                VideoPlayer(player: player)
+                    .aspectRatio(selectedAspectRatio.ratio, contentMode: .fit)
+                    .onDisappear { player.pause() }
+            } else {
+                CanvasView(
+                    workout: workout,
+                    useImageBackground: useImageBackground,
+                    backgroundColor: backgroundColor,
+                    backgroundImage: backgroundImage,
+                    aspectRatio: selectedAspectRatio.ratio,
+                    textAlignment: selectedTextAlignment.horizontalAlignment,
+                    workoutType: selectedWorkoutType,
+                    selectedFontName: selectedFontName,
+                    baseFontSize: baseFontSize,
+                    accumulatedOffset: $canvasOffset
+                )
+            }
+        }
     }
 
     var body: some View {
@@ -66,34 +106,29 @@ struct WorkoutDetailView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    // 운동 타입
                     Picker("운동 타입", selection: $selectedWorkoutType) {
                         ForEach(WorkoutType.allCases) { type in
                             Text(type.displayName).tag(type)
                         }
                     }.pickerStyle(.menu)
 
-                    // 폰트 선택
                     Picker("폰트 선택", selection: $selectedFontName) {
-                        ForEach(Self.allFontNames, id: \.self) { font in
+                        ForEach(Self.allFontNames, id: \ .self) { font in
                             Text(font).font(.custom(font, size: 14)).tag(font)
                         }
                     }.pickerStyle(.menu)
 
-                    // 텍스트 크기 조절
                     VStack(alignment: .leading) {
                         Text("텍스트 크기: \(Int(baseFontSize))")
                         Slider(value: $baseFontSize, in: 10...30, step: 1)
                     }
 
-                    // 정렬
                     Picker("정렬", selection: $selectedTextAlignment) {
                         ForEach(TextAlignmentOption.allCases) { option in
                             Text(option.rawValue).tag(option)
                         }
                     }.pickerStyle(.segmented)
 
-                    // 캔버스 비율
                     Picker("비율", selection: $selectedAspectRatio) {
                         ForEach(AspectRatioOption.allCases) { option in
                             Text(option.rawValue).tag(option)
@@ -105,9 +140,9 @@ struct WorkoutDetailView: View {
             }
 
             HStack(spacing: 10) {
-                // 단색
                 Button {
                     self.useImageBackground = false
+                    self.showVideoPreview = false
                 } label: {
                     Label("단색", systemImage: "paintpalette")
                         .padding(.vertical, 10)
@@ -118,7 +153,6 @@ struct WorkoutDetailView: View {
                         .font(.footnote)
                 }
 
-                // 이미지 선택
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                     Label("이미지", systemImage: "photo")
                         .padding(.vertical, 10)
@@ -136,6 +170,7 @@ struct WorkoutDetailView: View {
                                let image = UIImage(data: data) {
                                 self.backgroundImage = image
                                 self.useImageBackground = true
+                                self.showVideoPreview = false
                             } else {
                                 self.errorMessage = "이미지를 로드할 수 없습니다."
                             }
@@ -145,7 +180,6 @@ struct WorkoutDetailView: View {
                     }
                 }
 
-                // 비디오 선택
                 PhotosPicker(selection: $selectedVideoItem, matching: .videos) {
                     Label("비디오", systemImage: "film")
                         .padding(.vertical, 10)
@@ -159,24 +193,16 @@ struct WorkoutDetailView: View {
                     guard let item = newItem else { return }
                     Task {
                         do {
-                            if let url = try await item.loadTransferable(type: URL.self) {
-                                let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
-                                try FileManager.default.copyItem(at: url, to: tmpURL)
-                                self.selectedVideoURL = tmpURL
-                                print("✅ 비디오 선택됨: \(tmpURL)")
-                                if let overlayImage = displayedCanvasView.snapshot(aspectRatio: selectedAspectRatio.ratio) {
-                                    VideoOverlayExporter.overlayImage(on: tmpURL, with: overlayImage) { success, error in
-                                        if success {
-                                            self.statusMessage = "동영상 저장 완료!"
-                                        } else {
-                                            self.errorMessage = error?.localizedDescription ?? "동영상 저장 실패"
-                                        }
-                                    }
-                                } else {
-                                    self.errorMessage = "커버 이미지를 만들 수 없습니다."
-                                }
+                            if let videoData = try await item.loadTransferable(type: Data.self) {
+                                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("selected_video.mov")
+                                try videoData.write(to: tempURL)
+                                print("✅ 비디오 저장 위치: \(tempURL)")
+                                self.selectedVideoURL = tempURL
+                                videoPlayerManager.loadVideo(from: tempURL)
+                                self.showVideoPreview = true
+                                self.statusMessage = "비디오 미리보기 중..."
                             } else {
-                                self.errorMessage = "비디오 URL을 로드할 수 없습니다."
+                                self.errorMessage = "비디오를 로드할 수 없습니다."
                             }
                         } catch {
                             self.errorMessage = "비디오 처리 오류: \(error.localizedDescription)"
@@ -184,7 +210,6 @@ struct WorkoutDetailView: View {
                     }
                 }
 
-                // 저장
                 Button {
                     saveCanvas()
                 } label: {
@@ -204,6 +229,11 @@ struct WorkoutDetailView: View {
         }
         .navigationTitle("Workout Details")
         .navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            if showVideoPreview {
+                videoPlayerManager.resume()
+            }
+        }
     }
 
     private func saveCanvas() {
@@ -251,3 +281,4 @@ struct WorkoutDetailView: View {
         }
     }
 }
+
