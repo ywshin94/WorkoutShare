@@ -66,7 +66,7 @@ struct WorkoutDetailView: View {
                     VideoPlayer(player: player)
                         .aspectRatio(selectedAspectRatio.ratio, contentMode: .fit)
                         .onDisappear { player.pause() }
-
+                    
                     CanvasView(
                         workout: workout,
                         useImageBackground: false,
@@ -79,7 +79,7 @@ struct WorkoutDetailView: View {
                         baseFontSize: baseFontSize,
                         accumulatedOffset: $canvasOffset
                     )
-                    .allowsHitTesting(false)
+                    // ⬇️ 여기서 드래그 가능하게 허용! (allowHitTesting true)
                 }
             } else {
                 CanvasView(
