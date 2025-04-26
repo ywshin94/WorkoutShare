@@ -62,9 +62,25 @@ struct WorkoutDetailView: View {
     private var displayedCanvasView: some View {
         ZStack {
             if showVideoPreview, let player = videoPlayerManager.player {
-                VideoPlayer(player: player)
-                    .aspectRatio(selectedAspectRatio.ratio, contentMode: .fit)
-                    .onDisappear { player.pause() }
+                ZStack {
+                    VideoPlayer(player: player)
+                        .aspectRatio(selectedAspectRatio.ratio, contentMode: .fit)
+                        .onDisappear { player.pause() }
+
+                    CanvasView(
+                        workout: workout,
+                        useImageBackground: false,
+                        backgroundColor: .clear,
+                        backgroundImage: nil,
+                        aspectRatio: selectedAspectRatio.ratio,
+                        textAlignment: selectedTextAlignment.horizontalAlignment,
+                        workoutType: selectedWorkoutType,
+                        selectedFontName: selectedFontName,
+                        baseFontSize: baseFontSize,
+                        accumulatedOffset: $canvasOffset
+                    )
+                    .allowsHitTesting(false)
+                }
             } else {
                 CanvasView(
                     workout: workout,
@@ -113,7 +129,7 @@ struct WorkoutDetailView: View {
                     }.pickerStyle(.menu)
 
                     Picker("폰트 선택", selection: $selectedFontName) {
-                        ForEach(Self.allFontNames, id: \ .self) { font in
+                        ForEach(Self.allFontNames, id: \.self) { font in
                             Text(font).font(.custom(font, size: 14)).tag(font)
                         }
                     }.pickerStyle(.menu)
@@ -281,4 +297,3 @@ struct WorkoutDetailView: View {
         }
     }
 }
-
