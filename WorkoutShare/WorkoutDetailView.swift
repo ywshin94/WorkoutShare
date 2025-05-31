@@ -25,11 +25,14 @@ struct WorkoutDetailView: View {
     @State private var showElevation: Bool
     @State private var showLabels: Bool = true
 
-    // ✨ 새로운 State 변수 추가: 레이아웃 방향
     @State private var selectedLayoutDirection: LayoutDirectionOption = .vertical // 기본값은 세로
 
+    // 회전 각도
+    @State private var rotationAngle: Angle = .zero // 기본값 0도
+
+    // @State private var skewAmount: CGFloat = 0.0 // ✨ 제거
+
     // MARK: - Initializer
-    // 외부에서 workout을 받아올 때 초기값 설정
     init(workout: StravaWorkout) {
         self.workout = workout
         let initialWorkoutType = WorkoutType.fromStravaType(workout.type)
@@ -39,8 +42,11 @@ struct WorkoutDetailView: View {
         _showDistance = State(initialValue: initialWorkoutType.showsDistance)
         _showDuration = State(initialValue: initialWorkoutType.showsDuration)
         _showElevation = State(initialValue: initialWorkoutType.showsElevation)
-        _showLabels = State(initialValue: true) // 제목 표시 기본값 true
-        _selectedLayoutDirection = State(initialValue: .vertical) // 레이아웃 기본값 세로
+        _showLabels = State(initialValue: true)
+        _selectedLayoutDirection = State(initialValue: .vertical)
+        _canvasOffset = State(initialValue: .zero)
+        _rotationAngle = State(initialValue: .zero)
+        // _skewAmount = State(initialValue: 0.0) // ✨ 제거
 
         // 페이스와 속도 초기값 설정 로직 변경
         if initialWorkoutType.isPacePrimary {
@@ -85,8 +91,10 @@ struct WorkoutDetailView: View {
                 showSpeed: $showSpeed,
                 showElevation: $showElevation,
                 showLabels: $showLabels,
-                layoutDirection: $selectedLayoutDirection, // ✨ 바인딩 전달
-                accumulatedOffset: $canvasOffset
+                layoutDirection: $selectedLayoutDirection,
+                accumulatedOffset: $canvasOffset,
+                rotationAngle: $rotationAngle
+                // skewAmount: $skewAmount // ✨ 제거
             )
         }
         .frame(width: canvasWidth, height: canvasHeight)
@@ -127,9 +135,8 @@ struct WorkoutDetailView: View {
                         showDistance = newType.showsDistance
                         showDuration = newType.showsDuration
                         showElevation = newType.showsElevation
-                        showLabels = true // 운동 타입 변경 시 제목은 다시 표시
+                        showLabels = true
 
-                        // 페이스/속도 토글 상태 업데이트 로직
                         if newType.isPacePrimary {
                             showPace = true
                             showSpeed = false
@@ -165,13 +172,21 @@ struct WorkoutDetailView: View {
                         }
                     }.pickerStyle(.segmented)
 
-                    // ✨ 레이아웃 방향 선택 Picker 추가
                     Picker("레이아웃", selection: $selectedLayoutDirection) {
                         ForEach(LayoutDirectionOption.allCases) { option in
                             Text(option.rawValue).tag(option)
                         }
                     }.pickerStyle(.segmented)
 
+                    VStack(alignment: .leading) {
+                        Text("회전: \(Int(rotationAngle.degrees))°")
+                        Slider(value: $rotationAngle.degrees, in: -180...180, step: 1)
+                    }
+                    
+                    // VStack(alignment: .leading) { // ✨ 제거
+                    //     Text("왜곡: \(String(format: "%.2f", skewAmount))")
+                    //     Slider(value: $skewAmount, in: -1.0...1.0, step: 0.05)
+                    // }
 
                     Section("표시 항목 선택") {
                         Toggle(isOn: $showLabels) {
@@ -278,8 +293,10 @@ struct WorkoutDetailView: View {
             showSpeed: $showSpeed,
             showElevation: $showElevation,
             showLabels: $showLabels,
-            layoutDirection: $selectedLayoutDirection, // ✨ 바인딩 전달
-            accumulatedOffset: $canvasOffset
+            layoutDirection: $selectedLayoutDirection,
+            accumulatedOffset: $canvasOffset,
+            rotationAngle: $rotationAngle
+            // skewAmount: $skewAmount // ✨ 제거
         )
 
         guard let image = viewToSnapshot.snapshot(aspectRatio: selectedAspectRatio.ratio) else {
