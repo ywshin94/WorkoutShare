@@ -73,11 +73,11 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         }
     }
 
-    var showsCalories: Bool {
-        return true
-    }
+    // var showsCalories: Bool { // ✨ 제거
+    //     return true
+    // }
 
-    // ✨ 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 페이스인지 여부
+    // 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 페이스인지 여부
     var isPacePrimary: Bool {
         switch self {
         case .run, .trailRun, .treadmill:
@@ -87,7 +87,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         }
     }
 
-    // ✨ 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 속도(km/h)인지 여부
+    // 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 속도(km/h)인지 여부
     var isSpeedPrimary: Bool {
         switch self {
         case .walk, .hike:

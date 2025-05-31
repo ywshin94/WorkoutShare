@@ -20,9 +20,7 @@ struct CanvasView: View {
     @Binding var showPace: Bool
     @Binding var showSpeed: Bool
     @Binding var showElevation: Bool
-    @Binding var showCalories: Bool
 
-    // ✨ 새로운 바인딩 프로퍼티 추가: 제목 (예: "거리", "시간" 등) 표시 여부
     @Binding var showLabels: Bool
 
     @Binding var accumulatedOffset: CGSize
@@ -51,10 +49,12 @@ struct CanvasView: View {
         }
     }
 
+    // ✨ 날짜 포맷터를 수정합니다.
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy.MM.dd hh:mm:ss a" // 요청하신 포맷
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        // 변경: "yy.MM.dd hh:mm a" -> "MMM d, yyyy 'at' h:mm a"
+        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+        formatter.locale = Locale(identifier: "en_US_POSIX") // 월 이름 (MMM)과 AM/PM을 위해 미국 로케일 사용
         return formatter
     }
 
@@ -139,7 +139,7 @@ struct CanvasView: View {
                     // 거리 표시 여부
                     if showDistance && workoutType.showsDistance {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                            if showLabels {
                                 Text("거리")
                                     .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                                     .foregroundColor(.white.opacity(0.8))
@@ -154,7 +154,7 @@ struct CanvasView: View {
                     // 시간 표시 여부
                     if showDuration && workoutType.showsDuration {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                            if showLabels {
                                 Text("시간")
                                     .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                                     .foregroundColor(.white.opacity(0.8))
@@ -169,7 +169,7 @@ struct CanvasView: View {
                     // 페이스 표시 여부
                     if showPace && workoutType.showsPace {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                            if showLabels {
                                 Text("페이스")
                                     .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                                     .foregroundColor(.white.opacity(0.8))
@@ -184,7 +184,7 @@ struct CanvasView: View {
                     // 속도 표시 여부
                     if showSpeed && workoutType.showsSpeed {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                            if showLabels {
                                 Text("속도")
                                     .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                                     .foregroundColor(.white.opacity(0.8))
@@ -199,27 +199,12 @@ struct CanvasView: View {
                     // 상승고도 표시 여부
                     if showElevation && workoutType.showsElevation {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                            if showLabels {
                                 Text("상승고도")
                                     .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                                     .foregroundColor(.white.opacity(0.8))
                             }
                             Text(workout.formattedElevationGain)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        Spacer().frame(height: 4)
-                    }
-
-                    // 칼로리 표시 여부
-                    if showCalories && workoutType.showsCalories {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels { // ✨ 제목 표시 여부 조건 추가
-                                Text("칼로리")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                            Text(workout.formattedCalories)
                                 .font(applyFont(baseSize: 17.0, weight: .semibold))
                                 .foregroundColor(.white)
                         }

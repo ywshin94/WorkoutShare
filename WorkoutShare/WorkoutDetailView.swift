@@ -23,7 +23,7 @@ struct WorkoutDetailView: View {
     @State private var showPace: Bool
     @State private var showSpeed: Bool
     @State private var showElevation: Bool
-    @State private var showCalories: Bool
+    // @State private var showCalories: Bool // ✨ 제거
     @State private var showLabels: Bool = true
 
     // MARK: - Initializer
@@ -37,10 +37,10 @@ struct WorkoutDetailView: View {
         _showDistance = State(initialValue: initialWorkoutType.showsDistance)
         _showDuration = State(initialValue: initialWorkoutType.showsDuration)
         _showElevation = State(initialValue: initialWorkoutType.showsElevation)
-        _showCalories = State(initialValue: initialWorkoutType.showsCalories)
+        // _showCalories = State(initialValue: initialWorkoutType.showsCalories) // ✨ 제거
         _showLabels = State(initialValue: true) // 제목 표시 기본값 true
 
-        // ✨ 페이스와 속도 초기값 설정 로직 변경
+        // 페이스와 속도 초기값 설정 로직 변경
         if initialWorkoutType.isPacePrimary {
             _showPace = State(initialValue: true)
             _showSpeed = State(initialValue: false)
@@ -82,7 +82,7 @@ struct WorkoutDetailView: View {
                 showPace: $showPace,
                 showSpeed: $showSpeed,
                 showElevation: $showElevation,
-                showCalories: $showCalories,
+                // showCalories: $showCalories, // ✨ 제거
                 showLabels: $showLabels,
                 accumulatedOffset: $canvasOffset
             )
@@ -125,10 +125,10 @@ struct WorkoutDetailView: View {
                         showDistance = newType.showsDistance
                         showDuration = newType.showsDuration
                         showElevation = newType.showsElevation
-                        showCalories = newType.showsCalories
+                        // showCalories = newType.showsCalories // ✨ 제거
                         showLabels = true // 운동 타입 변경 시 제목은 다시 표시
 
-                        // ✨ 페이스/속도 토글 상태 업데이트 로직
+                        // 페이스/속도 토글 상태 업데이트 로직
                         if newType.isPacePrimary {
                             showPace = true
                             showSpeed = false
@@ -183,9 +183,9 @@ struct WorkoutDetailView: View {
                         Toggle(isOn: $showElevation) {
                             Text("상승고도 표시")
                         }
-                        Toggle(isOn: $showCalories) {
-                            Text("칼로리 표시")
-                        }
+                        // Toggle(isOn: $showCalories) { // ✨ 제거
+                        //     Text("칼로리 표시")
+                        // }
                     }
                 }
                 .padding(.horizontal)
@@ -271,7 +271,7 @@ struct WorkoutDetailView: View {
             showPace: $showPace,
             showSpeed: $showSpeed,
             showElevation: $showElevation,
-            showCalories: $showCalories,
+            // showCalories: $showCalories, // ✨ 제거
             showLabels: $showLabels,
             accumulatedOffset: $canvasOffset
         )
