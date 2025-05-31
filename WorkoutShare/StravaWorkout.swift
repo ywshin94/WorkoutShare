@@ -51,7 +51,7 @@ struct StravaWorkout: Codable, Identifiable {
     // 상승 고도 포맷 (m)
     var formattedElevationGain: String {
         guard let elevation = totalElevationGain else { return "- m" } // 데이터 없으면 "-"
-        // 상승 고도가 0일 경우도 처리
+        // 상승 고기가 0일 경우도 처리
         if elevation == 0 { return "0 m"}
         return String(format: "%.0f m", elevation) // 정수로 표시
     }

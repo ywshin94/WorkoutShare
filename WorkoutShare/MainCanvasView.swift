@@ -53,4 +53,3 @@ struct MainCanvasView: View {
     MainCanvasView()
         .environmentObject(StravaService())
 }
-

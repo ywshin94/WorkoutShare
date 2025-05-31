@@ -33,23 +33,8 @@ struct ContentView: View {
             } else {
                 // 로그인 상태: 운동 목록 표시
                 VStack {
-                    // 디버깅 또는 상태 표시용 텍스트 (선택 사항)
-                    // Text("Access Token: \(stravaService.accessToken ?? "Logged in")")
-                    //     .font(.caption)
-                    //     .foregroundColor(.gray)
-                    //     .padding(.bottom)
-
                     // 운동 목록 뷰 (데이터는 StravaService에서 가져옴)
                     WorkoutListView(workouts: stravaService.workouts)
-                        // 데이터 로딩 중 또는 에러 발생 시 처리 (개선 가능)
-                        // .overlay {
-                        //     if stravaService.workouts.isEmpty && stravaService.errorMessage == nil {
-                        //         ProgressView("Loading workouts...")
-                        //     } else if let error = stravaService.errorMessage {
-                        //         Text("Error loading workouts: \(error)")
-                        //             .foregroundColor(.red)
-                        //     }
-                        // }
                 }
                 .navigationTitle("Workouts") // 네비게이션 타이틀
                 .onAppear {

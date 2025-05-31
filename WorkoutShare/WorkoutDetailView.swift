@@ -1,35 +1,8 @@
 import SwiftUI
 import PhotosUI
-import AVKit
+// AVKit 대신 PhotosUI만 import합니다.
 
-final class VideoPlayerManager: ObservableObject {
-    @Published var player: AVPlayer? = nil
-
-    func loadVideo(from url: URL) {
-        player?.pause()
-        let newPlayer = AVPlayer(url: url)
-        player = newPlayer
-
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: newPlayer.currentItem,
-            queue: .main
-        ) { [weak newPlayer] _ in
-            newPlayer?.seek(to: .zero)
-            newPlayer?.play()
-        }
-
-        newPlayer.play()
-    }
-
-    func pause() {
-        player?.pause()
-    }
-
-    func resume() {
-        player?.play()
-    }
-}
+// VideoPlayerManager는 더 이상 필요 없으므로 제거합니다.
 
 struct WorkoutDetailView: View {
     let workout: StravaWorkout
@@ -46,10 +19,12 @@ struct WorkoutDetailView: View {
     @State private var selectedFontName: String = "Futura-Bold"
     @State private var canvasOffset: CGSize = .zero
     @State private var baseFontSize: CGFloat = 13.0
-    @State private var selectedVideoItem: PhotosPickerItem?
-    @State private var selectedVideoURL: URL?
-    @State private var showVideoPreview: Bool = false
-    @StateObject private var videoPlayerManager = VideoPlayerManager()
+
+    // 비디오 관련 State 프로퍼티 제거
+    // @State private var selectedVideoItem: PhotosPickerItem?
+    // @State private var selectedVideoURL: URL?
+    // @State private var showVideoPreview: Bool = false
+    // @StateObject private var videoPlayerManager = VideoPlayerManager() // 제거
 
     private static let allFontNames: [String] = {
         var names: [String] = []
@@ -60,28 +35,33 @@ struct WorkoutDetailView: View {
     }()
 
     private var displayedCanvasView: some View {
-        ZStack {
-            if showVideoPreview, let player = videoPlayerManager.player {
-                ZStack {
-                    VideoPlayer(player: player)
-                        .aspectRatio(selectedAspectRatio.ratio, contentMode: .fit)
-                        .onDisappear { player.pause() }
-                    
-                    CanvasView(
-                        workout: workout,
-                        useImageBackground: false,
-                        backgroundColor: .clear,
-                        backgroundImage: nil,
-                        aspectRatio: selectedAspectRatio.ratio,
-                        textAlignment: selectedTextAlignment.horizontalAlignment,
-                        workoutType: selectedWorkoutType,
-                        selectedFontName: selectedFontName,
-                        baseFontSize: baseFontSize,
-                        accumulatedOffset: $canvasOffset
-                    )
-                    // ⬇️ 여기서 드래그 가능하게 허용! (allowHitTesting true)
-                }
-            } else {
+        let screenWidth = UIScreen.main.bounds.width
+        let canvasWidth = min(screenWidth - 40, 350)
+        let canvasHeight = canvasWidth / selectedAspectRatio.ratio
+
+        return ZStack(alignment: .center) {
+            // 비디오 미리보기 관련 로직 제거
+            // if showVideoPreview, let player = videoPlayerManager.player {
+            //     VideoPlayer(player: player)
+            //         .aspectRatio(contentMode: .fill)
+            //         .frame(width: canvasWidth, height: canvasHeight)
+            //         .clipped()
+            //
+            //     CanvasView(
+            //         workout: workout,
+            //         useImageBackground: false,
+            //         backgroundColor: .clear,
+            //         backgroundImage: nil,
+            //         aspectRatio: selectedAspectRatio.ratio,
+            //         textAlignment: selectedTextAlignment.horizontalAlignment,
+            //         workoutType: selectedWorkoutType,
+            //         selectedFontName: selectedFontName,
+            //         baseFontSize: baseFontSize,
+            //         accumulatedOffset: $canvasOffset
+            //     )
+            //     .frame(width: canvasWidth, height: canvasHeight)
+            //     .clipped()
+            // } else {
                 CanvasView(
                     workout: workout,
                     useImageBackground: useImageBackground,
@@ -94,8 +74,10 @@ struct WorkoutDetailView: View {
                     baseFontSize: baseFontSize,
                     accumulatedOffset: $canvasOffset
                 )
-            }
+            // }
         }
+        .frame(width: canvasWidth, height: canvasHeight)
+        .clipped()
     }
 
     var body: some View {
@@ -112,7 +94,7 @@ struct WorkoutDetailView: View {
                 }
                 if let statusMessage = statusMessage {
                     Text(statusMessage)
-                        .foregroundColor(statusMessage == "Saved successfully" || statusMessage == "동영상 저장 완료!" ? .green : .red)
+                        .foregroundColor(statusMessage == "Saved successfully" ? .green : .red) // 비디오 저장 관련 문구 제거
                         .font(.caption)
                         .lineLimit(1)
                 }
@@ -158,7 +140,7 @@ struct WorkoutDetailView: View {
             HStack(spacing: 10) {
                 Button {
                     self.useImageBackground = false
-                    self.showVideoPreview = false
+                    // self.showVideoPreview = false // 비디오 관련 로직 제거
                 } label: {
                     Label("단색", systemImage: "paintpalette")
                         .padding(.vertical, 10)
@@ -186,7 +168,7 @@ struct WorkoutDetailView: View {
                                let image = UIImage(data: data) {
                                 self.backgroundImage = image
                                 self.useImageBackground = true
-                                self.showVideoPreview = false
+                                // self.showVideoPreview = false // 비디오 관련 로직 제거
                             } else {
                                 self.errorMessage = "이미지를 로드할 수 없습니다."
                             }
@@ -196,35 +178,35 @@ struct WorkoutDetailView: View {
                     }
                 }
 
-                PhotosPicker(selection: $selectedVideoItem, matching: .videos) {
-                    Label("비디오", systemImage: "film")
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.orange.opacity(0.15))
-                        .foregroundColor(.orange)
-                        .cornerRadius(8)
-                        .font(.footnote)
-                }
-                .onChange(of: selectedVideoItem) { _, newItem in
-                    guard let item = newItem else { return }
-                    Task {
-                        do {
-                            if let videoData = try await item.loadTransferable(type: Data.self) {
-                                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("selected_video.mov")
-                                try videoData.write(to: tempURL)
-                                print("✅ 비디오 저장 위치: \(tempURL)")
-                                self.selectedVideoURL = tempURL
-                                videoPlayerManager.loadVideo(from: tempURL)
-                                self.showVideoPreview = true
-                                self.statusMessage = "비디오 미리보기 중..."
-                            } else {
-                                self.errorMessage = "비디오를 로드할 수 없습니다."
-                            }
-                        } catch {
-                            self.errorMessage = "비디오 처리 오류: \(error.localizedDescription)"
-                        }
-                    }
-                }
+                // 비디오 PhotosPicker 제거
+                // PhotosPicker(selection: $selectedVideoItem, matching: .videos) {
+                //     Label("비디오", systemImage: "film")
+                //         .padding(.vertical, 10)
+                //         .frame(maxWidth: .infinity)
+                //         .background(Color.orange.opacity(0.15))
+                //         .foregroundColor(.orange)
+                //         .cornerRadius(8)
+                //         .font(.footnote)
+                // }
+                // .onChange(of: selectedVideoItem) { _, newItem in
+                //     guard let item = newItem else { return }
+                //     Task {
+                //         do {
+                //             if let videoData = try await item.loadTransferable(type: Data.self) {
+                //                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("selected_video.mov")
+                //                 try videoData.write(to: tempURL)
+                //                 self.selectedVideoURL = tempURL
+                //                 videoPlayerManager.loadVideo(from: tempURL)
+                //                 self.showVideoPreview = true
+                //                 self.statusMessage = "비디오 미리보기 중..."
+                //             } else {
+                //                 self.errorMessage = "비디오를 로드할 수 없습니다."
+                //             }
+                //         } catch {
+                //             self.errorMessage = "비디오 처리 오류: \(error.localizedDescription)"
+                //         }
+                //     }
+                // }
 
                 Button {
                     saveCanvas()
@@ -245,11 +227,11 @@ struct WorkoutDetailView: View {
         }
         .navigationTitle("Workout Details")
         .navigationBarTitleDisplayMode(.inline)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            if showVideoPreview {
-                videoPlayerManager.resume()
-            }
-        }
+        // .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+        //     if showVideoPreview {
+        //         videoPlayerManager.resume()
+        //     }
+        // } // 비디오 관련 로직 제거
     }
 
     private func saveCanvas() {

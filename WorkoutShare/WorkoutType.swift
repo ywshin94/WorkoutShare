@@ -8,7 +8,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     case treadmill = "Treadmill" // Strava에선 보통 "Run"
     case walk = "Walk"
     case hike = "Hike"
-    case weight = "Weight"      // ✨ 추가
+    case weight = "Weight"     // ✨ 추가
     // 필요시 다른 타입 추가 (예: Ride, Swim 등)
 
     var id: String { self.rawValue } // Identifiable 준수
@@ -80,4 +80,3 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         }
     }
 }
-

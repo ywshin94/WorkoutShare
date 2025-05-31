@@ -1,4 +1,4 @@
-// ImageRender.swift — ✅ 안정적 snapshot 방식: SwiftUI View → View.snapshot()
+// ImageRender.swift — UIImage snapshot 받는 구조로 수정
 
 import SwiftUI
 import UIKit
@@ -40,4 +40,3 @@ extension View {
         }
     }
 }
-
