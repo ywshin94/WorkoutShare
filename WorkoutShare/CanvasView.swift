@@ -10,9 +10,20 @@ struct CanvasView: View {
     let backgroundImage: UIImage?
     let aspectRatio: CGFloat
     let textAlignment: HorizontalAlignment
-    let workoutType: WorkoutType
+    let workoutType: WorkoutType // WorkoutType enum 사용
     let selectedFontName: String
     let baseFontSize: CGFloat
+
+    // 기존 바인딩 프로퍼티들
+    @Binding var showDistance: Bool
+    @Binding var showDuration: Bool
+    @Binding var showPace: Bool
+    @Binding var showSpeed: Bool
+    @Binding var showElevation: Bool
+    @Binding var showCalories: Bool
+
+    // ✨ 새로운 바인딩 프로퍼티 추가: 제목 (예: "거리", "시간" 등) 표시 여부
+    @Binding var showLabels: Bool
 
     @Binding var accumulatedOffset: CGSize
     @State private var currentDragOffset: CGSize = .zero
@@ -38,6 +49,13 @@ struct CanvasView: View {
         case .trailing: return .trailing
         default: return .leading
         }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy.MM.dd hh:mm:ss a" // 요청하신 포맷
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
     }
 
     var dragGesture: some Gesture {
@@ -107,7 +125,8 @@ struct CanvasView: View {
             GeometryReader { geometry in
                 VStack(alignment: textAlignment, spacing: 0) {
                     VStack(alignment: textAlignment, spacing: 0) {
-                        Text(workoutType.displayName.uppercased())
+                        // 날짜/시간 표시 (폰트 두께는 .regular 유지)
+                        Text(workout.startDate, formatter: dateFormatter)
                             .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                             .foregroundColor(.white.opacity(0.8))
                         Text(workout.name)
@@ -115,62 +134,96 @@ struct CanvasView: View {
                             .foregroundColor(.white)
                     }
 
-                    Spacer().frame(height: 4)
-                    if workoutType.showsDistance {
+                    Spacer().frame(height: 4) // 첫 블록과 다음 블록 사이 간격
+
+                    // 거리 표시 여부
+                    if showDistance && workoutType.showsDistance {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            Text("거리")
-                                .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                .foregroundColor(.white.opacity(0.8))
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("거리")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                             Text(workout.formattedDistance)
                                 .font(applyFont(baseSize: 17.0, weight: .semibold))
                                 .foregroundColor(.white)
                         }
-                    }
-
-                    Spacer().frame(height: 4)
-                    VStack(alignment: textAlignment, spacing: 0) {
-                        Text("시간")
-                            .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text(workout.formattedDuration)
-                            .font(applyFont(baseSize: 17.0, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-
-                    if workoutType.showsPace {
                         Spacer().frame(height: 4)
+                    }
+
+                    // 시간 표시 여부
+                    if showDuration && workoutType.showsDuration {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            Text("페이스")
-                                .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                .foregroundColor(.white.opacity(0.8))
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("시간")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            Text(workout.formattedDuration)
+                                .font(applyFont(baseSize: 17.0, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        Spacer().frame(height: 4)
+                    }
+
+                    // 페이스 표시 여부
+                    if showPace && workoutType.showsPace {
+                        VStack(alignment: textAlignment, spacing: 0) {
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("페이스")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                             Text(workout.formattedPace)
                                 .font(applyFont(baseSize: 17.0, weight: .semibold))
                                 .foregroundColor(.white)
                         }
+                        Spacer().frame(height: 4)
                     }
 
-                    if workoutType.showsSpeed {
-                        Spacer().frame(height: 4)
+                    // 속도 표시 여부
+                    if showSpeed && workoutType.showsSpeed {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            Text("속도")
-                                .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                .foregroundColor(.white.opacity(0.8))
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("속도")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                             Text(workout.formattedSpeed)
                                 .font(applyFont(baseSize: 17.0, weight: .semibold))
                                 .foregroundColor(.white)
                         }
+                        Spacer().frame(height: 4)
                     }
 
-                    if workoutType.showsElevation {
-                        Spacer().frame(height: 4)
+                    // 상승고도 표시 여부
+                    if showElevation && workoutType.showsElevation {
                         VStack(alignment: textAlignment, spacing: 0) {
-                            Text("상승고도")
-                                .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                .foregroundColor(.white.opacity(0.8))
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("상승고도")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                             Text(workout.formattedElevationGain)
                                 .font(applyFont(baseSize: 17.0, weight: .semibold))
                                 .foregroundColor(.white)
                         }
+                        Spacer().frame(height: 4)
+                    }
+
+                    // 칼로리 표시 여부
+                    if showCalories && workoutType.showsCalories {
+                        VStack(alignment: textAlignment, spacing: 0) {
+                            if showLabels { // ✨ 제목 표시 여부 조건 추가
+                                Text("칼로리")
+                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            Text(workout.formattedCalories)
+                                .font(applyFont(baseSize: 17.0, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        Spacer().frame(height: 4)
                     }
                 }
                 .padding(.horizontal, max(5, 15))
@@ -196,7 +249,7 @@ struct CanvasView: View {
         }
         .frame(width: canvasWidth, height: canvasHeight)
         .clipped()
-        .drawingGroup() // ✅ GPU 렌더링 & aliasing 제거
+        .drawingGroup()
         .onAppear {
             print("CanvasView loaded. Target Size: \(canvasWidth)x\(canvasHeight)")
         }

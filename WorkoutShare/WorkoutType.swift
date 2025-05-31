@@ -8,8 +8,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     case treadmill = "Treadmill" // Strava에선 보통 "Run"
     case walk = "Walk"
     case hike = "Hike"
-    case weight = "Weight"     // ✨ 추가
-    // 필요시 다른 타입 추가 (예: Ride, Swim 등)
+    case weight = "Weight" // 보강운동 추가
 
     var id: String { self.rawValue } // Identifiable 준수
 
@@ -26,36 +25,9 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         }
     }
 
-    // 각 운동 타입별 데이터 표시 여부 플래그
-    // 페이스 표시 여부
-    var showsPace: Bool {
-        switch self {
-        case .run, .trailRun, .treadmill:
-            return true // 달리기 관련은 페이스 표시
-        default:
-            return false
-        }
-    }
-
-    // 속도(km/h) 표시 여부
-    var showsSpeed: Bool {
-        switch self {
-        case .walk, .hike:
-            return true
-        default:
-            return false // 걷기/하이킹은 속도 표시
-        }
-    }
-
-    // 상승고도 표시 여부
-    var showsElevation: Bool {
-        switch self {
-        case .trailRun, .hike:
-            return true // 트레일러닝/하이킹은 상승고도 표시
-        default:
-            return false
-        }
-    }
+    // 각 운동 타입별 데이터 표시 여부 플래그 (CanvasView에서 show... && workoutType.shows... 로 사용)
+    // 이 값들은 해당 운동 타입에서 '데이터가 존재할 수 있는가'를 나타내며,
+    // 초기 토글 상태와는 별개로 캔버스에 표시될 수 있는 데이터 종류를 제한합니다.
 
     var showsDistance: Bool {
         switch self {
@@ -66,17 +38,77 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         }
     }
 
+    var showsDuration: Bool {
+        return true
+    }
+
+    var showsPace: Bool {
+        switch self {
+        case .run, .trailRun, .treadmill:
+            return true
+        case .walk, .hike: // 걷기/하이킹도 페이스 표시 가능
+            return true
+        default:
+            return false
+        }
+    }
+
+    var showsSpeed: Bool {
+        switch self {
+        case .run, .trailRun, .treadmill: // 러닝도 속도 표시 가능
+            return true
+        case .walk, .hike:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var showsElevation: Bool {
+        switch self {
+        case .run, .trailRun, .hike:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var showsCalories: Bool {
+        return true
+    }
+
+    // ✨ 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 페이스인지 여부
+    var isPacePrimary: Bool {
+        switch self {
+        case .run, .trailRun, .treadmill:
+            return true
+        default:
+            return false
+        }
+    }
+
+    // ✨ 새로 추가: 해당 운동 타입의 주요(기본) 속도 지표가 속도(km/h)인지 여부
+    var isSpeedPrimary: Bool {
+        switch self {
+        case .walk, .hike:
+            return true
+        default:
+            return false
+        }
+    }
+
+
     static func fromStravaType(_ stravaType: String) -> WorkoutType {
         switch stravaType.lowercased() {
         case "run": return .run
         case "walk": return .walk
         case "hike": return .hike
-        case "trail run": return .trailRun
+        case "trailrun": return .trailRun
         case "treadmill": return .treadmill
         case "weighttraining", "weight": return .weight
         default:
-            print("⚠️ 예상치 못한 타입: \(stravaType)")
-            return .run
+            print("⚠️ 예상치 못한 Strava workout type: \(stravaType)")
+            return .run // 기본값
         }
     }
 }
