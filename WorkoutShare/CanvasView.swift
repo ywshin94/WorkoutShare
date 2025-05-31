@@ -23,6 +23,9 @@ struct CanvasView: View {
 
     @Binding var showLabels: Bool
 
+    // ✨ 새로운 바인딩 프로퍼티 추가: 레이아웃 방향
+    @Binding var layoutDirection: LayoutDirectionOption
+
     @Binding var accumulatedOffset: CGSize
     @State private var currentDragOffset: CGSize = .zero
     @State private var textSize: CGSize = .zero
@@ -49,12 +52,10 @@ struct CanvasView: View {
         }
     }
 
-    // ✨ 날짜 포맷터를 수정합니다.
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        // 변경: "yy.MM.dd hh:mm a" -> "MMM d, yyyy 'at' h:mm a"
-        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
-        formatter.locale = Locale(identifier: "en_US_POSIX") // 월 이름 (MMM)과 AM/PM을 위해 미국 로케일 사용
+        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a" // 요청하신 포맷
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }
 
@@ -125,7 +126,7 @@ struct CanvasView: View {
             GeometryReader { geometry in
                 VStack(alignment: textAlignment, spacing: 0) {
                     VStack(alignment: textAlignment, spacing: 0) {
-                        // 날짜/시간 표시 (폰트 두께는 .regular 유지)
+                        // 날짜/시간 표시
                         Text(workout.startDate, formatter: dateFormatter)
                             .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
                             .foregroundColor(.white.opacity(0.8))
@@ -134,81 +135,78 @@ struct CanvasView: View {
                             .foregroundColor(.white)
                     }
 
-                    Spacer().frame(height: 4) // 첫 블록과 다음 블록 사이 간격
+                    Spacer().frame(height: 4)
 
-                    // 거리 표시 여부
-                    if showDistance && workoutType.showsDistance {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels {
-                                Text("거리")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
+                    // ✨ 레이아웃 방향에 따라 HStack 또는 VStack으로 묶습니다.
+                    if layoutDirection == .horizontal {
+                        HStack(alignment: .top, spacing: 15) { // 가로 배치 시 간격 조절
+                            // 각 항목을 개별 VStack으로 묶어 정렬을 유지합니다.
+                            Group { // Group을 사용하여 여러 뷰를 묶을 수 있습니다.
+                                if showDistance && workoutType.showsDistance {
+                                    VStack(alignment: textAlignment, spacing: 0) {
+                                        if showLabels { Text("거리").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                        Text(workout.formattedDistance).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                    }
+                                }
+                                if showDuration && workoutType.showsDuration {
+                                    VStack(alignment: textAlignment, spacing: 0) {
+                                        if showLabels { Text("시간").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                        Text(workout.formattedDuration).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                    }
+                                }
+                                if showPace && workoutType.showsPace {
+                                    VStack(alignment: textAlignment, spacing: 0) {
+                                        if showLabels { Text("페이스").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                        Text(workout.formattedPace).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                    }
+                                }
+                                if showSpeed && workoutType.showsSpeed {
+                                    VStack(alignment: textAlignment, spacing: 0) {
+                                        if showLabels { Text("속도").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                        Text(workout.formattedSpeed).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                    }
+                                }
+                                if showElevation && workoutType.showsElevation {
+                                    VStack(alignment: textAlignment, spacing: 0) {
+                                        if showLabels { Text("상승고도").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                        Text(workout.formattedElevationGain).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                    }
+                                }
                             }
-                            Text(workout.formattedDistance)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
                         }
-                        Spacer().frame(height: 4)
-                    }
-
-                    // 시간 표시 여부
-                    if showDuration && workoutType.showsDuration {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels {
-                                Text("시간")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
+                    } else { // layoutDirection == .vertical
+                        VStack(alignment: textAlignment, spacing: 4) { // 세로 배치 시 항목 간 간격
+                            if showDistance && workoutType.showsDistance {
+                                VStack(alignment: textAlignment, spacing: 0) {
+                                    if showLabels { Text("거리").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                    Text(workout.formattedDistance).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                }
                             }
-                            Text(workout.formattedDuration)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        Spacer().frame(height: 4)
-                    }
-
-                    // 페이스 표시 여부
-                    if showPace && workoutType.showsPace {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels {
-                                Text("페이스")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
+                            if showDuration && workoutType.showsDuration {
+                                VStack(alignment: textAlignment, spacing: 0) {
+                                    if showLabels { Text("시간").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                    Text(workout.formattedDuration).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                }
                             }
-                            Text(workout.formattedPace)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        Spacer().frame(height: 4)
-                    }
-
-                    // 속도 표시 여부
-                    if showSpeed && workoutType.showsSpeed {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels {
-                                Text("속도")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
+                            if showPace && workoutType.showsPace {
+                                VStack(alignment: textAlignment, spacing: 0) {
+                                    if showLabels { Text("페이스").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                    Text(workout.formattedPace).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                }
                             }
-                            Text(workout.formattedSpeed)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        Spacer().frame(height: 4)
-                    }
-
-                    // 상승고도 표시 여부
-                    if showElevation && workoutType.showsElevation {
-                        VStack(alignment: textAlignment, spacing: 0) {
-                            if showLabels {
-                                Text("상승고도")
-                                    .font(applyFont(baseSize: baseLabelCaptionSize * 0.9))
-                                    .foregroundColor(.white.opacity(0.8))
+                            if showSpeed && workoutType.showsSpeed {
+                                VStack(alignment: textAlignment, spacing: 0) {
+                                    if showLabels { Text("속도").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                    Text(workout.formattedSpeed).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                }
                             }
-                            Text(workout.formattedElevationGain)
-                                .font(applyFont(baseSize: 17.0, weight: .semibold))
-                                .foregroundColor(.white)
+                            if showElevation && workoutType.showsElevation {
+                                VStack(alignment: textAlignment, spacing: 0) {
+                                    if showLabels { Text("상승고도").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(.white.opacity(0.8)) }
+                                    Text(workout.formattedElevationGain).font(applyFont(baseSize: 17.0, weight: .semibold)).foregroundColor(.white)
+                                }
+                            }
                         }
-                        Spacer().frame(height: 4)
                     }
                 }
                 .padding(.horizontal, max(5, 15))

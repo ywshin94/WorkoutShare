@@ -23,8 +23,10 @@ struct WorkoutDetailView: View {
     @State private var showPace: Bool
     @State private var showSpeed: Bool
     @State private var showElevation: Bool
-    // @State private var showCalories: Bool // ✨ 제거
     @State private var showLabels: Bool = true
+
+    // ✨ 새로운 State 변수 추가: 레이아웃 방향
+    @State private var selectedLayoutDirection: LayoutDirectionOption = .vertical // 기본값은 세로
 
     // MARK: - Initializer
     // 외부에서 workout을 받아올 때 초기값 설정
@@ -37,8 +39,8 @@ struct WorkoutDetailView: View {
         _showDistance = State(initialValue: initialWorkoutType.showsDistance)
         _showDuration = State(initialValue: initialWorkoutType.showsDuration)
         _showElevation = State(initialValue: initialWorkoutType.showsElevation)
-        // _showCalories = State(initialValue: initialWorkoutType.showsCalories) // ✨ 제거
         _showLabels = State(initialValue: true) // 제목 표시 기본값 true
+        _selectedLayoutDirection = State(initialValue: .vertical) // 레이아웃 기본값 세로
 
         // 페이스와 속도 초기값 설정 로직 변경
         if initialWorkoutType.isPacePrimary {
@@ -82,8 +84,8 @@ struct WorkoutDetailView: View {
                 showPace: $showPace,
                 showSpeed: $showSpeed,
                 showElevation: $showElevation,
-                // showCalories: $showCalories, // ✨ 제거
                 showLabels: $showLabels,
+                layoutDirection: $selectedLayoutDirection, // ✨ 바인딩 전달
                 accumulatedOffset: $canvasOffset
             )
         }
@@ -125,7 +127,6 @@ struct WorkoutDetailView: View {
                         showDistance = newType.showsDistance
                         showDuration = newType.showsDuration
                         showElevation = newType.showsElevation
-                        // showCalories = newType.showsCalories // ✨ 제거
                         showLabels = true // 운동 타입 변경 시 제목은 다시 표시
 
                         // 페이스/속도 토글 상태 업데이트 로직
@@ -164,6 +165,14 @@ struct WorkoutDetailView: View {
                         }
                     }.pickerStyle(.segmented)
 
+                    // ✨ 레이아웃 방향 선택 Picker 추가
+                    Picker("레이아웃", selection: $selectedLayoutDirection) {
+                        ForEach(LayoutDirectionOption.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }.pickerStyle(.segmented)
+
+
                     Section("표시 항목 선택") {
                         Toggle(isOn: $showLabels) {
                             Text("항목 제목 표시 (예: '거리', '시간')")
@@ -183,9 +192,6 @@ struct WorkoutDetailView: View {
                         Toggle(isOn: $showElevation) {
                             Text("상승고도 표시")
                         }
-                        // Toggle(isOn: $showCalories) { // ✨ 제거
-                        //     Text("칼로리 표시")
-                        // }
                     }
                 }
                 .padding(.horizontal)
@@ -271,8 +277,8 @@ struct WorkoutDetailView: View {
             showPace: $showPace,
             showSpeed: $showSpeed,
             showElevation: $showElevation,
-            // showCalories: $showCalories, // ✨ 제거
             showLabels: $showLabels,
+            layoutDirection: $selectedLayoutDirection, // ✨ 바인딩 전달
             accumulatedOffset: $canvasOffset
         )
 
