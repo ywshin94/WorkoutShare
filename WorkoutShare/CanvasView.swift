@@ -9,7 +9,7 @@ struct CanvasView: View {
     let backgroundImage: UIImage?
     let aspectRatio: CGFloat
     let textAlignment: HorizontalAlignment
-    let workoutType: WorkoutType // WorkoutType enum 사용
+    let workoutType: WorkoutType
     let selectedFontName: String
     let baseFontSize: CGFloat
 
@@ -25,12 +25,8 @@ struct CanvasView: View {
     @Binding var rotationAngle: Angle
 
     @State private var currentDragOffset: CGSize = .zero
-    @State private var textSize: CGSize = .zero // 텍스트 블록의 실제 크기
+    @State private var textSize: CGSize = .zero
 
-    // MARK: - Constants
-    // borderMargin은 이제 clampOffset 내에서 동적으로 결정되므로, 여기서의 상수는 기본값으로 남겨두거나 제거할 수 있습니다.
-    // 여기서는 사용되지 않으므로 제거합니다.
-    // private let borderMargin: CGFloat = 0.0 // ✨ 제거
     private let baseLabelFootnoteSize: CGFloat = 13.0
     private let baseLabelCaptionSize: CGFloat = 12.0
 
@@ -53,7 +49,7 @@ struct CanvasView: View {
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, BBBB 'at' h:mm a" // 요청하신 포맷: "May 31, 2025 at 7:11 PM"
+        formatter.dateFormat = "MMM d, yyyy @ h:mm a"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }
@@ -61,39 +57,32 @@ struct CanvasView: View {
     var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                // currentDragOffset은 임시 드래그 값
                 self.currentDragOffset = value.translation
             }
             .onEnded { value in
-                // 드래그 종료 시, 현재 누적된 오프셋에 최종 드래그 값을 더하고 클램프
                 let newAccumulatedOffset = CGSize(
                     width: accumulatedOffset.width + value.translation.width,
                     height: accumulatedOffset.height + value.translation.height
                 )
                 self.accumulatedOffset = clampOffset(potentialOffset: newAccumulatedOffset)
-                self.currentDragOffset = .zero // 드래그 종료 시 임시 오프셋 초기화
+                self.currentDragOffset = .zero
             }
     }
 
-    // ✨ clampOffset 함수 수정: 회전 값에 따라 borderMargin 동적 적용
     private func clampOffset(potentialOffset: CGSize) -> CGSize {
-        // 회전 각도에 따라 적용할 마진 값 결정
         let currentBorderMargin: CGFloat
-        if rotationAngle.degrees.isZero { // 회전이 0도일 때 (허용 오차 범위 내)
-            currentBorderMargin = 5.0 // 회전 없을 때 보더 영역 유지
+        if rotationAngle.degrees.isZero {
+            currentBorderMargin = 5.0
         } else {
-            currentBorderMargin = 0.0 // 회전 있을 때 보더 영역 제거
+            currentBorderMargin = 0.0
         }
 
-        // 텍스트 블록의 원본 크기
         let originalWidth = textSize.width
         let originalHeight = textSize.height
 
-        // 회전 변환 행렬 생성 (실제 회전 각도 사용)
         let angleRadians = rotationAngle.radians
         let transform = CGAffineTransform(rotationAngle: angleRadians)
 
-        // 텍스트 블록의 네 꼭지점 (중심을 0,0으로 간주)
         let halfOriginalWidth = originalWidth / 2
         let halfOriginalHeight = originalHeight / 2
 
@@ -102,7 +91,6 @@ struct CanvasView: View {
         let p3 = CGPoint(x: -halfOriginalWidth, y: halfOriginalHeight).applying(transform)
         let p4 = CGPoint(x: halfOriginalWidth, y: halfOriginalHeight).applying(transform)
 
-        // 회전 후의 최소/최대 X, Y 좌표를 찾아 바운딩 박스 크기 계산
         let rotatedMinX = min(p1.x, p2.x, p3.x, p4.x)
         let rotatedMaxX = max(p1.x, p2.x, p3.x, p4.x)
         let rotatedMinY = min(p1.y, p2.y, p3.y, p4.y)
@@ -111,17 +99,14 @@ struct CanvasView: View {
         let rotatedBlockWidth = rotatedMaxX - rotatedMinX
         let rotatedBlockHeight = rotatedMaxY - rotatedMinY
 
-        // 캔버스 중앙을 기준으로 제한 영역 계산
         let halfCanvasWidth = canvasWidth / 2
         let halfCanvasHeight = canvasHeight / 2
 
-        // 회전된 블록의 중심이 캔버스 경계 내에 있도록 제한
         let maxX = halfCanvasWidth - (rotatedBlockWidth / 2) - currentBorderMargin
         let minX = -halfCanvasWidth + (rotatedBlockWidth / 2) + currentBorderMargin
         let maxY = halfCanvasHeight - (rotatedBlockHeight / 2) - currentBorderMargin
         let minY = -halfCanvasHeight + (rotatedBlockHeight / 2) + currentBorderMargin
 
-        // 회전된 블록의 크기가 캔버스보다 크다면 제한하지 않음 (이 경우 움직임이 자유로움)
         if rotatedBlockWidth + 2 * currentBorderMargin > canvasWidth || rotatedBlockHeight + 2 * currentBorderMargin > canvasHeight {
             return potentialOffset
         }
@@ -156,9 +141,7 @@ struct CanvasView: View {
                     .frame(width: canvasWidth, height: canvasHeight)
             }
 
-            // 캔버스 전체 GeometryReader (캔버스 크기 파악)
             GeometryReader { canvasGeometry in
-                // 운동 정보 블록 (회전은 여기서 적용)
                 VStack(alignment: textAlignment, spacing: 0) {
                     VStack(alignment: textAlignment, spacing: 0) {
                         Text(workout.startDate, formatter: dateFormatter)
@@ -194,10 +177,7 @@ struct CanvasView: View {
                             }
                     }
                 )
-                // 변형(Transform) 효과들을 먼저 적용합니다.
-                // 뷰의 로컬 중심을 기준으로 회전만 적용됩니다.
-                .rotationEffect(-rotationAngle, anchor: .center) // 회전 방향 반전 유지
-                // 이후에 위치를 조정합니다.
+                .rotationEffect(rotationAngle, anchor: .center) // 회전 방향: 제스처와 일치
                 .position(x: canvasGeometry.size.width / 2 + accumulatedOffset.width + currentDragOffset.width,
                           y: canvasGeometry.size.height / 2 + accumulatedOffset.height + currentDragOffset.height)
                 .gesture(dragGesture)
@@ -250,3 +230,4 @@ struct CanvasView: View {
         }
     }
 }
+

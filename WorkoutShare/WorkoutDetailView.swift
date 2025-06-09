@@ -12,12 +12,10 @@ struct WorkoutDetailView: View {
     @State private var statusMessage: String?
     @State private var selectedAspectRatio: AspectRatioOption = .fourByFive
     @State private var selectedTextAlignment: TextAlignmentOption = .left
-    @State private var selectedWorkoutType: WorkoutType
     @State private var selectedFontName: String = "Futura-Bold"
     @State private var canvasOffset: CGSize = .zero
     @State private var baseFontSize: CGFloat = 13.0
 
-    // 각 운동 정보 항목의 표시 여부를 제어하는 State 변수
     @State private var showDistance: Bool
     @State private var showDuration: Bool
     @State private var showPace: Bool
@@ -25,20 +23,18 @@ struct WorkoutDetailView: View {
     @State private var showElevation: Bool
     @State private var showLabels: Bool = true
 
-    @State private var selectedLayoutDirection: LayoutDirectionOption = .vertical // 기본값은 세로
+    @State private var selectedLayoutDirection: LayoutDirectionOption = .vertical
 
-    // 회전 각도
-    @State private var rotationAngle: Angle = .zero // 기본값 0도
+    @State private var rotationAngle: Angle = .zero
+    @State private var gestureRotation: Angle = .zero
 
-    // @State private var skewAmount: CGFloat = 0.0 // ✨ 제거
+    private let workoutType: WorkoutType
 
-    // MARK: - Initializer
     init(workout: StravaWorkout) {
         self.workout = workout
         let initialWorkoutType = WorkoutType.fromStravaType(workout.type)
-        
-        _selectedWorkoutType = State(initialValue: initialWorkoutType)
-        
+        self.workoutType = initialWorkoutType
+
         _showDistance = State(initialValue: initialWorkoutType.showsDistance)
         _showDuration = State(initialValue: initialWorkoutType.showsDuration)
         _showElevation = State(initialValue: initialWorkoutType.showsElevation)
@@ -46,16 +42,14 @@ struct WorkoutDetailView: View {
         _selectedLayoutDirection = State(initialValue: .vertical)
         _canvasOffset = State(initialValue: .zero)
         _rotationAngle = State(initialValue: .zero)
-        // _skewAmount = State(initialValue: 0.0) // ✨ 제거
 
-        // 페이스와 속도 초기값 설정 로직 변경
         if initialWorkoutType.isPacePrimary {
             _showPace = State(initialValue: true)
             _showSpeed = State(initialValue: false)
         } else if initialWorkoutType.isSpeedPrimary {
             _showPace = State(initialValue: false)
             _showSpeed = State(initialValue: true)
-        } else { // 기타 (예: Weight)
+        } else {
             _showPace = State(initialValue: false)
             _showSpeed = State(initialValue: false)
         }
@@ -74,6 +68,15 @@ struct WorkoutDetailView: View {
         let canvasWidth = min(screenWidth - 40, 350)
         let canvasHeight = canvasWidth / selectedAspectRatio.ratio
 
+        let rotationGesture = RotationGesture()
+            .onChanged { angle in
+                gestureRotation = angle
+            }
+            .onEnded { angle in
+                rotationAngle += angle
+                gestureRotation = .zero
+            }
+
         return ZStack(alignment: .center) {
             CanvasView(
                 workout: workout,
@@ -82,7 +85,7 @@ struct WorkoutDetailView: View {
                 backgroundImage: backgroundImage,
                 aspectRatio: selectedAspectRatio.ratio,
                 textAlignment: selectedTextAlignment.horizontalAlignment,
-                workoutType: selectedWorkoutType,
+                workoutType: workoutType,
                 selectedFontName: selectedFontName,
                 baseFontSize: baseFontSize,
                 showDistance: $showDistance,
@@ -93,9 +96,9 @@ struct WorkoutDetailView: View {
                 showLabels: $showLabels,
                 layoutDirection: $selectedLayoutDirection,
                 accumulatedOffset: $canvasOffset,
-                rotationAngle: $rotationAngle
-                // skewAmount: $skewAmount // ✨ 제거
+                rotationAngle: .constant(rotationAngle + gestureRotation)
             )
+            .gesture(rotationGesture)
         }
         .frame(width: canvasWidth, height: canvasHeight)
         .clipped()
@@ -125,30 +128,6 @@ struct WorkoutDetailView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    Picker("운동 타입", selection: $selectedWorkoutType) {
-                        ForEach(WorkoutType.allCases) { type in
-                            Text(type.displayName).tag(type)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: selectedWorkoutType) { _, newType in
-                        showDistance = newType.showsDistance
-                        showDuration = newType.showsDuration
-                        showElevation = newType.showsElevation
-                        showLabels = true
-
-                        if newType.isPacePrimary {
-                            showPace = true
-                            showSpeed = false
-                        } else if newType.isSpeedPrimary {
-                            showPace = false
-                            showSpeed = true
-                        } else {
-                            showPace = false
-                            showSpeed = false
-                        }
-                    }
-
                     Picker("폰트 선택", selection: $selectedFontName) {
                         ForEach(Self.allFontNames, id: \.self) { font in
                             Text(font).font(.custom(font, size: 14)).tag(font)
@@ -178,15 +157,7 @@ struct WorkoutDetailView: View {
                         }
                     }.pickerStyle(.segmented)
 
-                    VStack(alignment: .leading) {
-                        Text("회전: \(Int(rotationAngle.degrees))°")
-                        Slider(value: $rotationAngle.degrees, in: -180...180, step: 1)
-                    }
-                    
-                    // VStack(alignment: .leading) { // ✨ 제거
-                    //     Text("왜곡: \(String(format: "%.2f", skewAmount))")
-                    //     Slider(value: $skewAmount, in: -1.0...1.0, step: 0.05)
-                    // }
+                    // 회전 슬라이더 완전히 제거
 
                     Section("표시 항목 선택") {
                         Toggle(isOn: $showLabels) {
@@ -284,7 +255,7 @@ struct WorkoutDetailView: View {
             backgroundImage: backgroundImage,
             aspectRatio: selectedAspectRatio.ratio,
             textAlignment: selectedTextAlignment.horizontalAlignment,
-            workoutType: selectedWorkoutType,
+            workoutType: workoutType,
             selectedFontName: selectedFontName,
             baseFontSize: baseFontSize,
             showDistance: $showDistance,
@@ -295,8 +266,7 @@ struct WorkoutDetailView: View {
             showLabels: $showLabels,
             layoutDirection: $selectedLayoutDirection,
             accumulatedOffset: $canvasOffset,
-            rotationAngle: $rotationAngle
-            // skewAmount: $skewAmount // ✨ 제거
+            rotationAngle: .constant(rotationAngle)
         )
 
         guard let image = viewToSnapshot.snapshot(aspectRatio: selectedAspectRatio.ratio) else {
@@ -327,3 +297,4 @@ struct WorkoutDetailView: View {
         }
     }
 }
+
