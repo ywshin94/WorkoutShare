@@ -2,198 +2,160 @@ import SwiftUI
 import PhotosUI
 
 struct WorkoutDetailView: View {
+    enum ActivePanel: Identifiable {
+        case editor, color
+        var id: Self { self }
+    }
+    
     let workout: StravaWorkout
-
-    @State private var useImageBackground: Bool = false
-    @State private var backgroundColor: Color = .blue
-    @State private var backgroundImage: UIImage?
-    @State private var errorMessage: String?
+    let workoutType: WorkoutType
+    
+    @State private var configuration: CanvasConfiguration
+    
+    @State private var gestureRotation: Angle = .zero
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var statusMessage: String?
-    @State private var selectedAspectRatio: AspectRatioOption = .fourByFive
-    @State private var selectedTextAlignment: TextAlignmentOption = .left
-    @State private var selectedWorkoutType: WorkoutType
-    @State private var selectedFontName: String = "Futura-Bold"
-    @State private var canvasOffset: CGSize = .zero
-    @State private var baseFontSize: CGFloat = 13.0
-
-    @State private var showDistance: Bool
-    @State private var showDuration: Bool
-    @State private var showPace: Bool
-    @State private var showSpeed: Bool
-    @State private var showElevation: Bool
-    @State private var showLabels: Bool = true
-    @State private var selectedLayoutDirection: LayoutDirectionOption = .vertical
-
-    // 회전 각도 상태
-    @State private var rotationAngle: Angle = .zero
-    @State private var gestureRotation: Angle = .zero
-
-    // 편집 패널 표시 여부
-    @State private var showEditorPanel: Bool = false
-
-    // MARK: - Initializer
+    @State private var errorMessage: String?
+    
+    @State private var activePanel: ActivePanel? = nil
+    
     init(workout: StravaWorkout) {
         self.workout = workout
-        let initialWorkoutType = WorkoutType.fromStravaType(workout.type)
-        _selectedWorkoutType = State(initialValue: initialWorkoutType)
-        _showDistance = State(initialValue: initialWorkoutType.showsDistance)
-        _showDuration = State(initialValue: initialWorkoutType.showsDuration)
-        _showElevation = State(initialValue: initialWorkoutType.showsElevation)
-        _showLabels = State(initialValue: true)
-        _selectedLayoutDirection = State(initialValue: .vertical)
-        _canvasOffset = State(initialValue: .zero)
-        _rotationAngle = State(initialValue: .zero)
-        if initialWorkoutType.isPacePrimary {
-            _showPace = State(initialValue: true)
-            _showSpeed = State(initialValue: false)
-        } else if initialWorkoutType.isSpeedPrimary {
-            _showPace = State(initialValue: false)
-            _showSpeed = State(initialValue: true)
-        } else {
-            _showPace = State(initialValue: false)
-            _showSpeed = State(initialValue: false)
-        }
+        self.workoutType = WorkoutType.fromStravaType(workout.type)
+        
+        var initialConfig = CanvasConfiguration()
+        initialConfig.initialize(for: self.workoutType)
+        _configuration = State(initialValue: initialConfig)
     }
-
-    private static let allFontNames: [String] = {
-        var names: [String] = []
-        for familyName in UIFont.familyNames.sorted() {
-            names.append(contentsOf: UIFont.fontNames(forFamilyName: familyName).sorted())
-        }
-        return names
-    }()
 
     var body: some View {
         GeometryReader { geometry in
-            // 전체 화면 높이
             let screenHeight = geometry.size.height
-            // 메뉴 패널 높이 (40%)
-            let menuPanelHeight = screenHeight * 0.4
-            // 바텀 메뉴바 높이 (고정값)
+            let panelHeight = screenHeight * 0.5
             let bottomBarHeight: CGFloat = 72
-            // 캔버스 영역 높이 (메뉴창이 올라오면 그만큼 줄임)
-            let canvasAreaHeight = showEditorPanel
-                ? screenHeight - menuPanelHeight - bottomBarHeight
-                : screenHeight - bottomBarHeight
 
-            ZStack(alignment: .bottom) {
-                VStack(spacing: 0) {
-                    displayedCanvasView(canvasAreaHeight: canvasAreaHeight)
-                        .padding(.top)
-                    Spacer(minLength: 0)
+            VStack(spacing: 0) {
+                GeometryReader { contentGeometry in
+                    ZStack {
+                        Color(.secondarySystemBackground).edgesIgnoringSafeArea(.all)
+                        displayedCanvasView(canvasAreaHeight: contentGeometry.size.height)
+                    }
                 }
-                .navigationTitle("Workout Details")
-                .navigationBarTitleDisplayMode(.inline)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // 바텀 메뉴바 (항상 맨 아래 고정)
-                bottomMenuBar
+                if let panel = activePanel {
+                    switch panel {
+                    case .editor:
+                        CanvasEditorView(
+                            configuration: $configuration,
+                            onClose: { activePanel = nil }
+                        )
+                        .frame(height: panelHeight)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    case .color:
+                        ColorPickerView(
+                            selectedColor: $configuration.backgroundColor,
+                            useImageBackground: $configuration.useImageBackground,
+                            onClose: { activePanel = nil }
+                        )
+                        .frame(height: panelHeight)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                
+                bottomMenuBar(geometry: geometry)
                     .frame(height: bottomBarHeight)
                     .background(.thinMaterial)
-                    .ignoresSafeArea(edges: .bottom)
-                    .zIndex(2)
-
-                // 에디터 패널 바텀시트 (바텀바 위에, 내부 스크롤)
-                BottomSheetEditorPanel(
-                    isPresented: $showEditorPanel,
-                    height: menuPanelHeight,
-                    selectedFontName: $selectedFontName,
-                    baseFontSize: $baseFontSize,
-                    selectedTextAlignment: $selectedTextAlignment,
-                    selectedAspectRatio: $selectedAspectRatio,
-                    selectedLayoutDirection: $selectedLayoutDirection,
-                    showLabels: $showLabels,
-                    showDistance: $showDistance,
-                    showDuration: $showDuration,
-                    showPace: $showPace,
-                    showSpeed: $showSpeed,
-                    showElevation: $showElevation
-                )
-                .zIndex(3)
+            }
+            .animation(.easeInOut(duration: 0.35), value: activePanel)
+            .edgesIgnoringSafeArea(.bottom)
+            .navigationTitle("Workout Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .background(Color(.secondarySystemBackground))
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            Task {
+                do {
+                    if let data = try await newItem?.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        configuration.backgroundImage = image
+                        configuration.useImageBackground = true
+                    }
+                } catch {
+                    errorMessage = "이미지 처리 오류: \(error.localizedDescription)"
+                }
             }
         }
     }
 
-    // 캔버스 뷰 (높이 조절)
     private func displayedCanvasView(canvasAreaHeight: CGFloat) -> some View {
         let screenWidth = UIScreen.main.bounds.width
-        let canvasWidth = min(screenWidth - 40, 350)
-        // 캔버스 비율에 맞춰 최대 높이 제한
-        let maxCanvasHeight = canvasWidth / selectedAspectRatio.ratio
-        let canvasHeight = min(canvasAreaHeight - 16, maxCanvasHeight)
-
-        // 회전 제스처
+        let availableWidth = screenWidth - 40
+        let availableHeight = canvasAreaHeight - 20
+        let designWidth: CGFloat = 350.0
+        var finalCanvasWidth: CGFloat
+        var finalCanvasHeight: CGFloat
+        if availableWidth / configuration.aspectRatio.ratio <= availableHeight {
+            finalCanvasWidth = availableWidth
+            finalCanvasHeight = availableWidth / configuration.aspectRatio.ratio
+        } else {
+            finalCanvasHeight = availableHeight
+            finalCanvasWidth = availableHeight * configuration.aspectRatio.ratio
+        }
+        let scaleFactor = finalCanvasWidth / designWidth
         let rotationGesture = RotationGesture()
-            .onChanged { angle in
-                gestureRotation = angle
-            }
+            .onChanged { angle in gestureRotation = angle }
             .onEnded { angle in
-                rotationAngle += angle
+                configuration.rotationAngle += angle
                 gestureRotation = .zero
             }
-
-        return ZStack(alignment: .center) {
-            CanvasView(
-                workout: workout,
-                useImageBackground: useImageBackground,
-                backgroundColor: backgroundColor,
-                backgroundImage: backgroundImage,
-                aspectRatio: selectedAspectRatio.ratio,
-                textAlignment: selectedTextAlignment.horizontalAlignment,
-                workoutType: selectedWorkoutType,
-                selectedFontName: selectedFontName,
-                baseFontSize: baseFontSize,
-                showDistance: $showDistance,
-                showDuration: $showDuration,
-                showPace: $showPace,
-                showSpeed: $showSpeed,
-                showElevation: $showElevation,
-                showLabels: $showLabels,
-                layoutDirection: $selectedLayoutDirection,
-                accumulatedOffset: $canvasOffset,
-                rotationAngle: .constant(rotationAngle + gestureRotation)
-            )
-            .gesture(rotationGesture)
-        }
-        .frame(width: canvasWidth, height: canvasHeight)
+        
+        return CanvasView(
+            workout: workout,
+            useImageBackground: configuration.useImageBackground,
+            backgroundColor: configuration.backgroundColor,
+            backgroundImage: configuration.backgroundImage,
+            aspectRatio: configuration.aspectRatio.ratio,
+            textAlignment: configuration.textAlignment.horizontalAlignment,
+            workoutType: workoutType,
+            selectedFontName: configuration.fontName,
+            baseFontSize: configuration.baseFontSize,
+            scaleFactor: scaleFactor,
+            isForSnapshot: false,
+            textColorValue: $configuration.textColorValue,
+            showDistance: $configuration.showDistance,
+            showDuration: $configuration.showDuration,
+            showPace: $configuration.showPace,
+            showSpeed: $configuration.showSpeed,
+            showElevation: $configuration.showElevation,
+            showLabels: $configuration.showLabels,
+            layoutDirection: $configuration.layoutDirection,
+            showTitle: $configuration.showTitle,
+            showDateTime: $configuration.showDateTime,
+            accumulatedOffset: $configuration.accumulatedOffset,
+            rotationAngle: .constant(configuration.rotationAngle + gestureRotation)
+        )
+        .gesture(rotationGesture)
+        .frame(width: finalCanvasWidth, height: finalCanvasHeight)
         .clipped()
     }
-
-    // 하단 메뉴바 (편집 버튼 포함, 항상 고정)
-    private var bottomMenuBar: some View {
+    
+    private func bottomMenuBar(geometry: GeometryProxy) -> some View {
         HStack(spacing: 10) {
             Button {
-                self.useImageBackground = false
+                activePanel = .color
             } label: {
                 Label("단색", systemImage: "paintpalette")
                     .frame(maxWidth: .infinity)
             }
+            
             PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                 Label("이미지", systemImage: "photo")
                     .frame(maxWidth: .infinity)
             }
-            .onChange(of: selectedPhotoItem) { _, newItem in
-                guard let item = newItem else { return }
-                Task {
-                    do {
-                        if let data = try await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            self.backgroundImage = image
-                            self.useImageBackground = true
-                        } else {
-                            self.errorMessage = "이미지를 로드할 수 없습니다."
-                        }
-                    } catch {
-                        self.errorMessage = "이미지 처리 오류: \(error.localizedDescription)"
-                    }
-                }
-            }
 
-            // 편집 메뉴 버튼 (토글)
             Button {
-                withAnimation(.easeInOut) {
-                    showEditorPanel.toggle()
-                }
+                activePanel = activePanel == .editor ? nil : .editor
             } label: {
                 Label("편집", systemImage: "slider.horizontal.3")
                     .frame(maxWidth: .infinity)
@@ -207,36 +169,51 @@ struct WorkoutDetailView: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.top, 10)
+        .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 0 : 10)
     }
 
     private func saveCanvas() {
         statusMessage = "Rendering..."
         errorMessage = nil
 
+        let designWidth: CGFloat = 350.0
+        let exportWidth: CGFloat = 1080.0
+        let exportHeight = exportWidth / configuration.aspectRatio.ratio
+        let exportSize = CGSize(width: exportWidth, height: exportHeight)
+        let exportScaleFactor = exportWidth / designWidth
+
         let viewToSnapshot = CanvasView(
             workout: workout,
-            useImageBackground: useImageBackground,
-            backgroundColor: backgroundColor,
-            backgroundImage: backgroundImage,
-            aspectRatio: selectedAspectRatio.ratio,
-            textAlignment: selectedTextAlignment.horizontalAlignment,
-            workoutType: selectedWorkoutType,
-            selectedFontName: selectedFontName,
-            baseFontSize: baseFontSize,
-            showDistance: $showDistance,
-            showDuration: $showDuration,
-            showPace: $showPace,
-            showSpeed: $showSpeed,
-            showElevation: $showElevation,
-            showLabels: $showLabels,
-            layoutDirection: $selectedLayoutDirection,
-            accumulatedOffset: $canvasOffset,
-            rotationAngle: .constant(rotationAngle)
+            useImageBackground: configuration.useImageBackground,
+            // ✅ 이 부분을 원래대로 돌려놓아, 투명뿐만 아니라 다른 단색 배경도 올바르게 저장되도록 합니다.
+            backgroundColor: configuration.backgroundColor,
+            backgroundImage: configuration.backgroundImage,
+            aspectRatio: configuration.aspectRatio.ratio,
+            textAlignment: configuration.textAlignment.horizontalAlignment,
+            workoutType: workoutType,
+            selectedFontName: configuration.fontName,
+            baseFontSize: configuration.baseFontSize,
+            scaleFactor: exportScaleFactor,
+            isForSnapshot: true,
+            textColorValue: .constant(configuration.textColorValue),
+            showDistance: .constant(configuration.showDistance),
+            showDuration: .constant(configuration.showDuration),
+            showPace: .constant(configuration.showPace),
+            showSpeed: .constant(configuration.showSpeed),
+            showElevation: .constant(configuration.showElevation),
+            showLabels: .constant(configuration.showLabels),
+            layoutDirection: .constant(configuration.layoutDirection),
+            showTitle: .constant(configuration.showTitle),
+            showDateTime: .constant(configuration.showDateTime),
+            accumulatedOffset: .constant(configuration.accumulatedOffset),
+            rotationAngle: .constant(configuration.rotationAngle)
         )
-
-        guard let image = viewToSnapshot.snapshot(aspectRatio: selectedAspectRatio.ratio) else {
-            statusMessage = "Failed to render canvas"
+        
+        guard let image = viewToSnapshot.snapshot(size: exportSize) else {
+            DispatchQueue.main.async {
+                self.statusMessage = "이미지 생성 실패"
+            }
             return
         }
 
@@ -249,156 +226,17 @@ struct WorkoutDetailView: View {
                     }) { success, error in
                         DispatchQueue.main.async {
                             if success {
-                                self.statusMessage = "Saved successfully"
+                                self.statusMessage = "저장 완료!"
                             } else {
-                                let errorMsg = error?.localizedDescription ?? "Unknown error"
-                                self.statusMessage = "Failed to save: \(errorMsg)"
+                                let errorMsg = error?.localizedDescription ?? "알 수 없는 오류"
+                                self.statusMessage = "저장 실패: \(errorMsg)"
                             }
                         }
                     }
                 default:
-                    self.statusMessage = "Photo library access denied."
+                    self.statusMessage = "사진첩 접근 권한이 없습니다."
                 }
             }
         }
     }
 }
-
-// 바텀시트 편집툴 패널 (스크롤 지원, 바텀바 위에만 올라옴)
-struct BottomSheetEditorPanel: View {
-    @Binding var isPresented: Bool
-    let height: CGFloat
-
-    @Binding var selectedFontName: String
-    @Binding var baseFontSize: CGFloat
-    @Binding var selectedTextAlignment: TextAlignmentOption
-    @Binding var selectedAspectRatio: AspectRatioOption
-    @Binding var selectedLayoutDirection: LayoutDirectionOption
-    @Binding var showLabels: Bool
-    @Binding var showDistance: Bool
-    @Binding var showDuration: Bool
-    @Binding var showPace: Bool
-    @Binding var showSpeed: Bool
-    @Binding var showElevation: Bool
-
-    private static let allFontNames: [String] = {
-        var names: [String] = []
-        for familyName in UIFont.familyNames.sorted() {
-            names.append(contentsOf: UIFont.fontNames(forFamilyName: familyName).sorted())
-        }
-        return names
-    }()
-
-    var body: some View {
-        Group {
-            if isPresented {
-                VStack(spacing: 0) {
-                    Spacer()
-                    VStack(spacing: 0) {
-                        Capsule()
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 48, height: 6)
-                            .padding(.top, 8)
-                        HStack {
-                            Spacer()
-                            Button(action: {
-                                withAnimation { isPresented = false }
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.trailing, 12)
-                        }
-                        ScrollView(.vertical, showsIndicators: true) {
-                            VStack(spacing: 16) {
-                                Picker("폰트 선택", selection: $selectedFontName) {
-                                    ForEach(Self.allFontNames, id: \.self) { font in
-                                        Text(font).font(.custom(font, size: 14)).tag(font)
-                                    }
-                                }.pickerStyle(.menu)
-
-                                VStack(alignment: .leading) {
-                                    Text("텍스트 크기: \(Int(baseFontSize))")
-                                    Slider(value: $baseFontSize, in: 10...30, step: 1)
-                                }
-
-                                Picker("정렬", selection: $selectedTextAlignment) {
-                                    ForEach(TextAlignmentOption.allCases) { option in
-                                        Text(option.rawValue).tag(option)
-                                    }
-                                }.pickerStyle(.segmented)
-
-                                Picker("비율", selection: $selectedAspectRatio) {
-                                    ForEach(AspectRatioOption.allCases) { option in
-                                        Text(option.rawValue).tag(option)
-                                    }
-                                }.pickerStyle(.segmented)
-
-                                Picker("레이아웃", selection: $selectedLayoutDirection) {
-                                    ForEach(LayoutDirectionOption.allCases) { option in
-                                        Text(option.rawValue).tag(option)
-                                    }
-                                }.pickerStyle(.segmented)
-
-                                Section("표시 항목 선택") {
-                                    Toggle(isOn: $showLabels) {
-                                        Text("항목 제목 표시 (예: '거리', '시간')")
-                                    }
-                                    Toggle(isOn: $showDistance) {
-                                        Text("거리 표시")
-                                    }
-                                    Toggle(isOn: $showDuration) {
-                                        Text("시간 표시")
-                                    }
-                                    Toggle(isOn: $showPace) {
-                                        Text("페이스 표시")
-                                    }
-                                    Toggle(isOn: $showSpeed) {
-                                        Text("속도 표시")
-                                    }
-                                    Toggle(isOn: $showElevation) {
-                                        Text("상승고도 표시")
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-                            .padding(.bottom, 24)
-                        }
-                    }
-                    .frame(height: height)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(18, corners: [.topLeft, .topRight])
-                    .shadow(radius: 10)
-                    .transition(.move(edge: .bottom))
-                }
-                .ignoresSafeArea(edges: .bottom)
-                .animation(.easeInOut, value: isPresented)
-            }
-        }
-    }
-}
-
-// 바텀시트 라운드 코너 확장
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat = 10.0
-    var corners: UIRectCorner = .allCorners
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}
-
