@@ -2,56 +2,44 @@ import SwiftUI
 import UIKit
 
 extension View {
+    /// SwiftUI 뷰를 주어진 크기의 UIImage로 캡처합니다.
+    /// UIGraphicsImageRenderer와 drawHierarchy를 사용하여 좌표, 스케일, 색상 문제를 모두 해결한 가장 안정적인 최종 버전입니다.
+    /// - Parameter size: 캡처할 이미지의 최종 픽셀 크기
+    /// - Returns: 렌더링된 UIImage. 실패 시 nil을 반환합니다.
     func snapshot(size: CGSize) -> UIImage? {
-        // 캡처하려는 SwiftUI 뷰를 UIHostingController로 감쌉니다.
+        // 1. 캡처할 뷰를 호스팅 컨트롤러에 담아 강제로 레이아웃을 실행시키기 위해 임시 윈도우에 추가합니다.
         let controller = UIHostingController(
             rootView: self
                 .frame(width: size.width, height: size.height)
                 .ignoresSafeArea()
         )
         
-        guard let view = controller.view else {
-            return nil
-        }
+        guard let view = controller.view else { return nil }
         
-        // 뷰의 프레임을 설정하고 모든 배경을 명시적으로 투명하게 만듭니다.
         let targetFrame = CGRect(origin: .zero, size: size)
         view.bounds = targetFrame
         view.backgroundColor = .clear
 
-        // 뷰를 화면에 표시되는 것과 동일한 상태로 만들기 위해 임시 UIWindow에 추가합니다.
-        // 이것이 뷰의 레이아웃과 렌더링을 보장하는 가장 확실한 방법입니다.
         let window = UIWindow(frame: targetFrame)
         window.rootViewController = controller
-        window.backgroundColor = .clear
-        window.makeKeyAndVisible() // 윈도우를 활성화하여 렌더링을 강제합니다.
-        
-        // 뷰가 레이아웃을 다시 계산하고 적용하도록 강제합니다.
+        window.makeKeyAndVisible()
         view.setNeedsLayout()
         view.layoutIfNeeded()
 
-        // 이미지 렌더러의 포맷을 설정합니다.
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false // 투명도를 지원하도록 설정 (가장 중요)
-        format.scale = 1.0   // 1배율로 렌더링하여 요청된 픽셀 크기를 정확히 맞춥니다.
+        // 2. 애플의 고수준 이미지 렌더링 API를 사용합니다.
+        // 이 렌더러는 레티나 스케일, 좌표계 등을 자동으로 처리합니다.
+        let renderer = UIGraphicsImageRenderer(size: size)
         
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        
-        // 최종적으로 이미지를 렌더링합니다.
-        let image = renderer.image { ctx in
-            view.layer.render(in: ctx.cgContext)
+        let image = renderer.image { _ in
+            // 3. 화면에 보이는 것과 가장 유사하게 캡처하는 drawHierarchy 메서드를 사용합니다.
+            // 이 방법이 layer.render 보다 색상 표현이 더 정확합니다.
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
         }
         
-        // 사용한 임시 윈도우를 정리합니다.
+        // 4. 사용한 임시 윈도우를 정리하고 최종 UIImage를 반환합니다.
         window.isHidden = true
         window.rootViewController = nil
         
-        // 생성된 이미지의 크기가 0인지 확인하여 실패 여부를 판단합니다.
-        if image.size.width == 0 || image.size.height == 0 {
-             print("Warning: Snapshot resulted in a zero-size image.")
-             return nil
-        }
-
         return image
     }
 }

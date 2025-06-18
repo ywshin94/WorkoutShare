@@ -14,7 +14,7 @@ struct CanvasView: View {
     let baseFontSize: CGFloat
     let scaleFactor: CGFloat
     
-    // ✅ 스냅샷 생성용인지 여부를 구분하는 프로퍼티 추가
+    // 스냅샷 생성용인지 여부를 구분하는 프로퍼티
     let isForSnapshot: Bool
     
     @Binding var textColorValue: CGFloat
@@ -38,7 +38,6 @@ struct CanvasView: View {
     private let baseLabelFootnoteSize: CGFloat = 13.0
     private let baseLabelCaptionSize: CGFloat = 12.0
 
-    // ✅ isForSnapshot 기본값을 false로 설정하여 기존 호출 코드에 영향 없도록 함
     init(
         workout: StravaWorkout,
         useImageBackground: Bool,
@@ -50,7 +49,7 @@ struct CanvasView: View {
         selectedFontName: String,
         baseFontSize: CGFloat,
         scaleFactor: CGFloat,
-        isForSnapshot: Bool = false, // 기본값 설정
+        isForSnapshot: Bool = false,
         textColorValue: Binding<CGFloat>,
         showDistance: Binding<Bool>,
         showDuration: Binding<Bool>,
@@ -107,7 +106,6 @@ struct CanvasView: View {
     }
 
     private func dragGesture(in canvasSize: CGSize) -> some Gesture {
-        // ... (내부 로직 변경 없음)
         DragGesture()
             .onChanged { value in
                 self.currentDragOffset = value.translation
@@ -131,7 +129,6 @@ struct CanvasView: View {
     }
 
     private func clampOffset(potentialOffset: CGSize, canvasSize: CGSize) -> CGSize {
-        // ... (내부 로직 변경 없음)
         let currentBorderMargin: CGFloat = rotationAngle.degrees.isZero ? 5.0 : 0.0
         let originalWidth = textSize.width
         let originalHeight = textSize.height
@@ -165,7 +162,6 @@ struct CanvasView: View {
     }
 
     private func applyFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
-        // ... (내부 로직 변경 없음)
         let scaledSize = max(1, (baseSize * baseFontSize / 17.0) * scaleFactor)
         if let _ = UIFont(name: selectedFontName, size: scaledSize) {
              return Font.custom(selectedFontName, size: scaledSize)
@@ -180,26 +176,26 @@ struct CanvasView: View {
         let secondaryColor = primaryColor.opacity(0.8)
 
         ZStack(alignment: .center) {
-            // ✅ isForSnapshot 값에 따라 배경 처리 분기
-            if isForSnapshot {
-                // 저장 시에는 실제 backgroundColor 값을 사용 (.clear 포함)
-                backgroundColor
+            // MARK: - Background Layer
+            // 이 로직은 편집/저장 모두에 적용됩니다.
+            // useImageBackground 값에 따라 이미지 또는 단색/투명 배경을 설정합니다.
+            if useImageBackground, let image = backgroundImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
             } else {
-                // 평소에는 투명일 때 격자무늬를 보여줌
-                if !useImageBackground && backgroundColor == .clear {
-                    CheckerboardView()
-                } else if useImageBackground, let image = backgroundImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .clipped()
-                } else {
-                    backgroundColor
-                }
+                // 단색(backgroundColor)과 투명(Color.clear) 배경을 모두 처리합니다.
+                backgroundColor
+            }
+            
+            // MARK: - UI Helper Layer
+            // 이 격자무늬는 편집 시에만 보이고, 저장 시에는 렌더링되지 않습니다.
+            if !isForSnapshot && !useImageBackground && backgroundColor == .clear {
+                CheckerboardView()
             }
 
+            // MARK: - Content Layer
             GeometryReader { canvasGeometry in
-                // ... (이하 컨텐츠 뷰 로직은 변경 없음)
                 VStack(alignment: textAlignment, spacing: 0) {
                     if showDateTime {
                         Text(workout.startDate, formatter: dateFormatter)
@@ -254,7 +250,6 @@ struct CanvasView: View {
 
     @ViewBuilder
     private var workoutInfoItems: some View {
-        // ... (내부 로직 변경 없음)
         let primaryColor = Color(white: textColorValue)
         let secondaryColor = primaryColor.opacity(0.8)
 
