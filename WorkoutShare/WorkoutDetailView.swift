@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct WorkoutDetailView: View {
+    // MARK: - Properties and State
     enum ActivePanel: Identifiable {
         case editor, color
         var id: Self { self }
@@ -9,6 +10,9 @@ struct WorkoutDetailView: View {
     
     let workout: StravaWorkout
     let workoutType: WorkoutType
+    var onFetchWorkout: () -> Void
+    
+    @EnvironmentObject private var stravaService: StravaService
     
     @State private var configuration: CanvasConfiguration
     
@@ -18,184 +22,215 @@ struct WorkoutDetailView: View {
     @State private var errorMessage: String?
     
     @State private var activePanel: ActivePanel? = nil
+    @State private var showingLogoutConfirm = false
     
-    init(workout: StravaWorkout) {
+    init(workout: StravaWorkout, onFetchWorkout: @escaping () -> Void) {
         self.workout = workout
         self.workoutType = WorkoutType.fromStravaType(workout.type)
+        self.onFetchWorkout = onFetchWorkout
         
         var initialConfig = CanvasConfiguration()
         initialConfig.initialize(for: self.workoutType)
         _configuration = State(initialValue: initialConfig)
     }
 
+    // MARK: - Body
     var body: some View {
         GeometryReader { geometry in
-            let screenHeight = geometry.size.height
-            let panelHeight = screenHeight * 0.5
-            let bottomBarHeight: CGFloat = 72
-
             VStack(spacing: 0) {
-                GeometryReader { contentGeometry in
-                    ZStack {
-                        Color(.secondarySystemBackground).edgesIgnoringSafeArea(.all)
-                        displayedCanvasView(canvasAreaHeight: contentGeometry.size.height)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if let panel = activePanel {
-                    switch panel {
-                    case .editor:
-                        CanvasEditorView(
-                            configuration: $configuration,
-                            onClose: { activePanel = nil }
-                        )
-                        .frame(height: panelHeight)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    case .color:
-                        ColorPickerView(
-                            selectedColor: $configuration.backgroundColor,
-                            useImageBackground: $configuration.useImageBackground,
-                            onClose: { activePanel = nil }
-                        )
-                        .frame(height: panelHeight)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                canvasArea
+                
+                if workout.id != -1 {
+                    StravaAttributionView()
                 }
                 
+                activePanelView(height: geometry.size.height * 0.5)
+                
                 bottomMenuBar(geometry: geometry)
-                    .frame(height: bottomBarHeight)
-                    .background(.thinMaterial)
             }
             .animation(.easeInOut(duration: 0.35), value: activePanel)
             .edgesIgnoringSafeArea(.bottom)
-            .navigationTitle("Workout Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .background(Color(.secondarySystemBackground))
+            // ✅ [수정] 앱 전체 배경색을 밝은 회색으로 변경
+            .background(Color(.systemGray6))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingLogoutConfirm = true } label: { Image(systemName: "person.crop.circle.badge.xmark") }
+                }
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Menu {
+                        Picker("비율", selection: $configuration.aspectRatio) {
+                            ForEach(AspectRatioOption.allCases) { option in Text(option.rawValue).tag(option) }
+                        }
+                    } label: { Label("비율", systemImage: "aspectratio") }
+                    Button { activePanel = .color } label: { Label("단색", systemImage: "paintpalette") }
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) { Label("이미지", systemImage: "photo") }
+                }
+            }
+            .confirmationDialog("로그아웃", isPresented: $showingLogoutConfirm, titleVisibility: .visible) {
+                Button("Strava 연결 해제", role: .destructive) { Task { await stravaService.deauthorize() } }
+                Button("취소", role: .cancel) {}
+            } message: { Text("앱과 Strava의 연결을 해제하고 로그아웃합니다. 이 동작은 되돌릴 수 없습니다.") }
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
                 do {
-                    if let data = try await newItem?.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
+                    if let data = try await newItem?.loadTransferable(type: Data.self), let image = UIImage(data: data) {
                         configuration.backgroundImage = image
                         configuration.useImageBackground = true
                     }
-                } catch {
-                    errorMessage = "이미지 처리 오류: \(error.localizedDescription)"
-                }
+                } catch { errorMessage = "이미지 처리 오류: \(error.localizedDescription)" }
             }
         }
     }
+}
 
-    private func displayedCanvasView(canvasAreaHeight: CGFloat) -> some View {
-        let screenWidth = UIScreen.main.bounds.width
-        let availableWidth = screenWidth - 40
-        let availableHeight = canvasAreaHeight - 20
-        let designWidth: CGFloat = 350.0
-        var finalCanvasWidth: CGFloat
-        var finalCanvasHeight: CGFloat
-        if availableWidth / configuration.aspectRatio.ratio <= availableHeight {
-            finalCanvasWidth = availableWidth
-            finalCanvasHeight = availableWidth / configuration.aspectRatio.ratio
-        } else {
-            finalCanvasHeight = availableHeight
-            finalCanvasWidth = availableHeight * configuration.aspectRatio.ratio
-        }
-        let scaleFactor = finalCanvasWidth / designWidth
-        let rotationGesture = RotationGesture()
-            .onChanged { angle in gestureRotation = angle }
-            .onEnded { angle in
-                configuration.rotationAngle += angle
-                gestureRotation = .zero
+
+// MARK: - Refactored Helper Views
+private extension WorkoutDetailView {
+    
+    @ViewBuilder
+    var canvasArea: some View {
+        GeometryReader { contentGeometry in
+            ZStack {
+                // ✅ [수정] 캔버스 주변 배경색도 밝은 회색으로 변경
+                Color(.systemGray6).edgesIgnoringSafeArea(.all)
+                displayedCanvasView(canvasAreaHeight: contentGeometry.size.height)
             }
-        
-        return CanvasView(
-            workout: workout,
-            useImageBackground: configuration.useImageBackground,
-            backgroundColor: configuration.backgroundColor,
-            backgroundImage: configuration.backgroundImage,
-            aspectRatio: configuration.aspectRatio.ratio,
-            textAlignment: configuration.textAlignment.horizontalAlignment,
-            workoutType: workoutType,
-            selectedFontName: configuration.fontName,
-            baseFontSize: configuration.baseFontSize,
-            scaleFactor: scaleFactor,
-            isForSnapshot: false,
-            textColorValue: $configuration.textColorValue,
-            showDistance: $configuration.showDistance,
-            showDuration: $configuration.showDuration,
-            showPace: $configuration.showPace,
-            showSpeed: $configuration.showSpeed,
-            showElevation: $configuration.showElevation,
-            showLabels: $configuration.showLabels,
-            layoutDirection: $configuration.layoutDirection,
-            showTitle: $configuration.showTitle,
-            showDateTime: $configuration.showDateTime,
-            accumulatedOffset: $configuration.accumulatedOffset,
-            rotationAngle: .constant(configuration.rotationAngle + gestureRotation)
-        )
-        .gesture(rotationGesture)
-        .frame(width: finalCanvasWidth, height: finalCanvasHeight)
-        .clipped()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func bottomMenuBar(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                activePanel = .color
-            } label: {
-                Label("단색", systemImage: "paintpalette")
-                    .frame(maxWidth: .infinity)
+    @ViewBuilder
+    func activePanelView(height: CGFloat) -> some View {
+        if let panel = activePanel {
+            switch panel {
+            case .editor:
+                CanvasEditorView(configuration: $configuration, onClose: { activePanel = nil })
+                    .frame(height: height)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            case .color:
+                ColorPickerView(selectedColor: $configuration.backgroundColor, useImageBackground: $configuration.useImageBackground, onClose: { activePanel = nil })
+                    .frame(height: height)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            
-            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                Label("이미지", systemImage: "photo")
-                    .frame(maxWidth: .infinity)
+        }
+    }
+    
+    @ViewBuilder
+    func bottomMenuBar(geometry: GeometryProxy) -> some View {
+        let bottomBarHeight: CGFloat = 72
+        
+        HStack {
+            Button(action: onFetchWorkout) {
+                BottomBarButtonLabel(iconName: "list.bullet", text: "운동 선택")
             }
-
-            Button {
-                activePanel = activePanel == .editor ? nil : .editor
-            } label: {
-                Label("편집", systemImage: "slider.horizontal.3")
-                    .frame(maxWidth: .infinity)
+            Button(action: { activePanel = activePanel == .editor ? nil : .editor }) {
+                BottomBarButtonLabel(iconName: "slider.horizontal.3", text: "편집")
             }
-
-            Button {
-                saveCanvas()
-            } label: {
-                Label("저장", systemImage: "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
+            Button(action: saveCanvas) {
+                BottomBarButtonLabel(iconName: "square.and.arrow.down", text: "저장")
             }
         }
         .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 0 : 10)
+        .padding(.top, 12)
+        .frame(height: bottomBarHeight)
+        .padding(.bottom, geometry.safeAreaInsets.bottom)
+        .background(.thinMaterial)
+    }
+    
+    func displayedCanvasView(canvasAreaHeight: CGFloat) -> some View {
+        if canvasAreaHeight > 20 {
+            let screenWidth = UIScreen.main.bounds.width
+            let availableWidth = screenWidth - 40
+            let availableHeight = canvasAreaHeight - 20
+            let designWidth: CGFloat = 350.0
+            var finalCanvasWidth: CGFloat
+            var finalCanvasHeight: CGFloat
+            
+            if availableWidth / configuration.aspectRatio.ratio <= availableHeight {
+                finalCanvasWidth = availableWidth
+                finalCanvasHeight = availableWidth / configuration.aspectRatio.ratio
+            } else {
+                finalCanvasHeight = availableHeight
+                finalCanvasWidth = availableHeight * configuration.aspectRatio.ratio
+            }
+            
+            let scaleFactor = finalCanvasWidth / designWidth
+            
+            return AnyView(
+                CanvasView(
+                    workout: workout,
+                    useImageBackground: configuration.useImageBackground,
+                    backgroundColor: configuration.backgroundColor,
+                    backgroundImage: configuration.backgroundImage,
+                    aspectRatio: configuration.aspectRatio.ratio,
+                    textAlignment: configuration.textAlignment.horizontalAlignment,
+                    workoutType: workoutType,
+                    selectedFontName: configuration.fontName,
+                    baseFontSize: configuration.baseFontSize,
+                    scaleFactor: scaleFactor,
+                    isForSnapshot: false,
+                    textColorValue: $configuration.textColorValue,
+                    showDistance: $configuration.showDistance,
+                    showDuration: $configuration.showDuration,
+                    showPace: $configuration.showPace,
+                    showSpeed: $configuration.showSpeed,
+                    showElevation: $configuration.showElevation,
+                    showLabels: $configuration.showLabels,
+                    layoutDirection: $configuration.layoutDirection,
+                    showTitle: $configuration.showTitle,
+                    showDateTime: $configuration.showDateTime,
+                    accumulatedOffset: $configuration.accumulatedOffset,
+                    rotationAngle: $configuration.rotationAngle
+                )
+                .gesture(RotationGesture().onEnded { angle in
+                    configuration.rotationAngle += angle
+                })
+                .frame(width: finalCanvasWidth, height: finalCanvasHeight)
+                .clipped()
+            )
+        } else {
+            return AnyView(EmptyView())
+        }
     }
 
-    private func saveCanvas() {
+    struct BottomBarButtonLabel: View {
+        enum Content {
+            case iconAndText(iconName: String, text: String)
+            case customImage(imageName: String)
+        }
+        let content: Content
+        init(iconName: String, text: String) { self.content = .iconAndText(iconName: iconName, text: text) }
+        init(imageName: String) { self.content = .customImage(imageName: imageName) }
+        var body: some View {
+            VStack(spacing: 4) {
+                switch content {
+                case .iconAndText(let iconName, let text):
+                    Image(systemName: iconName).font(.title3)
+                    Text(text).font(.caption)
+                case .customImage(let imageName):
+                    Image(imageName).resizable().scaledToFit().frame(height: 24)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
+    // ✅ [수정] 생략되었던 saveCanvas 함수의 내용을 모두 포함합니다.
+    func saveCanvas() {
         statusMessage = "Rendering..."
         errorMessage = nil
-
         let designWidth: CGFloat = 350.0
         let exportWidth: CGFloat = 1080.0
         let exportHeight = exportWidth / configuration.aspectRatio.ratio
         let exportSize = CGSize(width: exportWidth, height: exportHeight)
         let exportScaleFactor = exportWidth / designWidth
-
         let viewToSnapshot = CanvasView(
-            workout: workout,
-            useImageBackground: configuration.useImageBackground,
-            // ✅ 이 부분을 원래대로 돌려놓아, 투명뿐만 아니라 다른 단색 배경도 올바르게 저장되도록 합니다.
-            backgroundColor: configuration.backgroundColor,
-            backgroundImage: configuration.backgroundImage,
-            aspectRatio: configuration.aspectRatio.ratio,
-            textAlignment: configuration.textAlignment.horizontalAlignment,
-            workoutType: workoutType,
-            selectedFontName: configuration.fontName,
-            baseFontSize: configuration.baseFontSize,
-            scaleFactor: exportScaleFactor,
-            isForSnapshot: true,
+            workout: workout, useImageBackground: configuration.useImageBackground,
+            backgroundColor: configuration.backgroundColor, backgroundImage: configuration.backgroundImage,
+            aspectRatio: configuration.aspectRatio.ratio, textAlignment: configuration.textAlignment.horizontalAlignment,
+            workoutType: workoutType, selectedFontName: configuration.fontName, baseFontSize: configuration.baseFontSize,
+            scaleFactor: exportScaleFactor, isForSnapshot: true,
             textColorValue: .constant(configuration.textColorValue),
             showDistance: .constant(configuration.showDistance),
             showDuration: .constant(configuration.showDuration),
@@ -209,14 +244,10 @@ struct WorkoutDetailView: View {
             accumulatedOffset: .constant(configuration.accumulatedOffset),
             rotationAngle: .constant(configuration.rotationAngle)
         )
-        
         guard let image = viewToSnapshot.snapshot(size: exportSize) else {
-            DispatchQueue.main.async {
-                self.statusMessage = "이미지 생성 실패"
-            }
+            DispatchQueue.main.async { self.statusMessage = "이미지 생성 실패" }
             return
         }
-
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             DispatchQueue.main.async {
                 switch status {
@@ -225,12 +256,8 @@ struct WorkoutDetailView: View {
                         PHAssetChangeRequest.creationRequestForAsset(from: image)
                     }) { success, error in
                         DispatchQueue.main.async {
-                            if success {
-                                self.statusMessage = "저장 완료!"
-                            } else {
-                                let errorMsg = error?.localizedDescription ?? "알 수 없는 오류"
-                                self.statusMessage = "저장 실패: \(errorMsg)"
-                            }
+                            if success { self.statusMessage = "저장 완료!" }
+                            else { self.statusMessage = "저장 실패: \(error?.localizedDescription ?? "알 수 없는 오류")" }
                         }
                     }
                 default:
@@ -238,5 +265,21 @@ struct WorkoutDetailView: View {
                 }
             }
         }
+    }
+}
+
+struct StravaAttributionView: View {
+    var body: some View {
+        Button(action: {
+            if let url = URL(string: "https://www.strava.com") {
+                UIApplication.shared.open(url)
+            }
+        }) {
+            Image("powered_by_strava")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 12)
+        }
+        .padding(.vertical, 4)
     }
 }

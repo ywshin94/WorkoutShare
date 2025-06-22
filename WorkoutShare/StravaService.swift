@@ -1,5 +1,5 @@
 import Foundation
-import UIKit // UIApplication.shared.open 사용
+import UIKit
 
 class StravaService: ObservableObject {
     private let clientId = "102274"
@@ -8,15 +8,14 @@ class StravaService: ObservableObject {
     private let stravaAuthorizeUrl = "https://www.strava.com/oauth/authorize"
     private let stravaTokenUrl = "https://www.strava.com/oauth/token"
     private let stravaActivitiesUrl = "https://www.strava.com/api/v3/athlete/activities"
+    private let stravaDeauthorizeUrl = "https://www.strava.com/oauth/deauthorize"
 
     @Published var accessToken: String?
     @Published var workouts: [StravaWorkout] = []
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
-
+    
     func startOAuthFlow() {
-        print("startOAuthFlow() called.")
-        
         let scope = "activity:read_all"
         var components = URLComponents(string: stravaAuthorizeUrl)!
         components.queryItems = [
@@ -27,7 +26,6 @@ class StravaService: ObservableObject {
             URLQueryItem(name: "scope", value: scope)
         ]
         if let url = components.url {
-            print("Constructed URL: \(url)")
             UIApplication.shared.open(url)
         } else {
             DispatchQueue.main.async {
@@ -37,18 +35,14 @@ class StravaService: ObservableObject {
     }
 
     func exchangeCodeForToken(code: String) async throws {
-        print("Attempting to exchange code for token...")
         await MainActor.run { self.isLoading = true; self.errorMessage = nil }
-
         guard let url = URL(string: stravaTokenUrl) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         let body = "client_id=\(clientId)&client_secret=\(clientSecret)&code=\(code)&grant_type=authorization_code"
         request.httpBody = body.data(using: .utf8)
-
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-
             if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
                 let stravaError = decodeStravaError(from: data) ?? "HTTP \(httpResponse.statusCode)"
                 await MainActor.run {
@@ -57,20 +51,20 @@ class StravaService: ObservableObject {
                 }
                 throw NSError(domain: "StravaAuthError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: stravaError])
             }
-
+            
+            // ✅ [최종 수정] 누락되었던 디코딩 전략을 다시 추가합니다.
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
             let tokenResponse = try decoder.decode(TokenResponse.self, from: data)
-
+            
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
                 self.isLoading = false
                 self.errorMessage = nil
             }
-
             await fetchRecentWorkouts()
         } catch {
-            print("Error during token exchange: \(error)")
             await MainActor.run {
                 self.errorMessage = "Failed to get token: \(error.localizedDescription)"
                 self.isLoading = false
@@ -82,37 +76,48 @@ class StravaService: ObservableObject {
     @MainActor
     func fetchRecentWorkouts() async {
         guard let token = accessToken else { return }
-
         self.isLoading = true
         self.errorMessage = nil
-
         var components = URLComponents(string: stravaActivitiesUrl)!
         components.queryItems = [ URLQueryItem(name: "per_page", value: "30") ]
-
         guard let url = components.url else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-
             if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
                 let stravaError = decodeStravaError(from: data) ?? "HTTP \(httpResponse.statusCode)"
                 self.errorMessage = "Failed to fetch workouts: \(stravaError)"
                 self.isLoading = false
                 return
             }
-
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let fetchedWorkouts = try decoder.decode([StravaWorkout].self, from: data)
-
-            self.workouts = fetchedWorkouts
+            self.workouts = try decoder.decode([StravaWorkout].self, from: data)
             self.isLoading = false
         } catch {
             self.errorMessage = "Could not load workouts: \(error.localizedDescription)"
             self.isLoading = false
+        }
+    }
+    
+    func deauthorize() async {
+        guard let token = accessToken else { return }
+        guard let url = URL(string: stravaDeauthorizeUrl) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let body = "access_token=\(token)"
+        request.httpBody = body.data(using: .utf8)
+        do {
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            print("Failed to deauthorize on Strava server: \(error.localizedDescription)")
+        }
+        await MainActor.run {
+            self.accessToken = nil
+            self.workouts = []
+            self.errorMessage = nil
         }
     }
 
@@ -126,23 +131,16 @@ class StravaService: ObservableObject {
             let field: String?
             let code: String?
         }
-
-        guard let errorResponse = try? JSONDecoder().decode(StravaErrorResponse.self, from: data) else {
-            return nil
-        }
-
+        guard let errorResponse = try? JSONDecoder().decode(StravaErrorResponse.self, from: data) else { return nil }
         var detailedError = errorResponse.message ?? "Unknown Strava error"
         if let firstError = errorResponse.errors?.first {
             detailedError += " (\(firstError.resource ?? "Resource") \(firstError.field ?? "field"): \(firstError.code ?? "code"))"
         }
-
-        return detailedError
-            .replacingOccurrences(of: "Unknown Strava error ()", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty ? nil : detailedError
+        return detailedError.replacingOccurrences(of: "Unknown Strava error ()", with: "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : detailedError
     }
 }
 
+// ✅ [최종 수정] 원래의 완전한 형태로 복원합니다.
 struct TokenResponse: Codable {
     let tokenType: String?
     let expiresAt: Int?
