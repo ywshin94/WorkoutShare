@@ -3,8 +3,9 @@ import PhotosUI
 
 struct WorkoutDetailView: View {
     // MARK: - Properties and State
+    
     enum ActivePanel: Identifiable {
-        case editor, color
+        case style, layout, items, color
         var id: Self { self }
     }
     
@@ -22,7 +23,7 @@ struct WorkoutDetailView: View {
     @State private var errorMessage: String?
     
     @State private var activePanel: ActivePanel? = nil
-    @State private var showingLogoutConfirm = false
+    @State private var showingSettings = false
     
     init(workout: StravaWorkout, onFetchWorkout: @escaping () -> Void) {
         self.workout = workout
@@ -44,17 +45,16 @@ struct WorkoutDetailView: View {
                     StravaAttributionView()
                 }
                 
-                activePanelView(height: geometry.size.height * 0.5)
+                activePanelView(maxHeight: geometry.size.height * 0.5)
                 
                 bottomMenuBar(geometry: geometry)
             }
-            .animation(.easeInOut(duration: 0.35), value: activePanel)
+            .animation(.easeInOut(duration: 0.35), value: activePanel?.id)
             .edgesIgnoringSafeArea(.bottom)
-            // ✅ [수정] 앱 전체 배경색을 밝은 회색으로 변경
             .background(Color(.systemGray6))
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button { showingLogoutConfirm = true } label: { Image(systemName: "person.crop.circle.badge.xmark") }
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Menu {
@@ -62,14 +62,14 @@ struct WorkoutDetailView: View {
                             ForEach(AspectRatioOption.allCases) { option in Text(option.rawValue).tag(option) }
                         }
                     } label: { Label("비율", systemImage: "aspectratio") }
-                    Button { activePanel = .color } label: { Label("단색", systemImage: "paintpalette") }
+                    Button { activePanel = (activePanel == .color) ? nil : .color } label: { Label("단색", systemImage: "paintpalette") }
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) { Label("이미지", systemImage: "photo") }
                 }
             }
-            .confirmationDialog("로그아웃", isPresented: $showingLogoutConfirm, titleVisibility: .visible) {
-                Button("Strava 연결 해제", role: .destructive) { Task { await stravaService.deauthorize() } }
-                Button("취소", role: .cancel) {}
-            } message: { Text("앱과 Strava의 연결을 해제하고 로그아웃합니다. 이 동작은 되돌릴 수 없습니다.") }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+                    .environmentObject(stravaService)
+            }
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -92,7 +92,6 @@ private extension WorkoutDetailView {
     var canvasArea: some View {
         GeometryReader { contentGeometry in
             ZStack {
-                // ✅ [수정] 캔버스 주변 배경색도 밝은 회색으로 변경
                 Color(.systemGray6).edgesIgnoringSafeArea(.all)
                 displayedCanvasView(canvasAreaHeight: contentGeometry.size.height)
             }
@@ -100,17 +99,35 @@ private extension WorkoutDetailView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
+    // ✅ [수정] activePanelView의 로직을 명확하게 분리하여 높이를 제어합니다.
     @ViewBuilder
-    func activePanelView(height: CGFloat) -> some View {
+    func activePanelView(maxHeight: CGFloat) -> some View {
         if let panel = activePanel {
+            let dragToDismiss = DragGesture()
+                .onEnded { value in
+                    if value.translation.height > 50 {
+                        activePanel = nil
+                    }
+                }
+
             switch panel {
-            case .editor:
-                CanvasEditorView(configuration: $configuration, onClose: { activePanel = nil })
-                    .frame(height: height)
+            case .style, .items:
+                // '스타일', '항목'은 고정 높이를 가집니다.
+                CanvasEditorView(configuration: $configuration, mode: panel)
+                    .frame(height: maxHeight)
+                    .gesture(dragToDismiss)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                
+            case .layout:
+                // '레이아웃'은 프레임을 지정하지 않아 내용물에 맞게 높이가 조절됩니다.
+                CanvasEditorView(configuration: $configuration, mode: panel)
+                    .gesture(dragToDismiss)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+
             case .color:
+                // '색상' 패널도 내용물에 맞게 조절됩니다.
                 ColorPickerView(selectedColor: $configuration.backgroundColor, useImageBackground: $configuration.useImageBackground, onClose: { activePanel = nil })
-                    .frame(height: height)
+                    .gesture(dragToDismiss)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -120,18 +137,29 @@ private extension WorkoutDetailView {
     func bottomMenuBar(geometry: GeometryProxy) -> some View {
         let bottomBarHeight: CGFloat = 72
         
-        HStack {
+        HStack(alignment: .top) {
             Button(action: onFetchWorkout) {
                 BottomBarButtonLabel(iconName: "list.bullet", text: "운동 선택")
             }
-            Button(action: { activePanel = activePanel == .editor ? nil : .editor }) {
-                BottomBarButtonLabel(iconName: "slider.horizontal.3", text: "편집")
+            
+            Button(action: { activePanel = (activePanel == .style) ? nil : .style }) {
+                BottomBarButtonLabel(iconName: "textformat.size", text: "스타일")
+                    .foregroundColor(activePanel == .style ? .accentColor : .primary)
             }
+            Button(action: { activePanel = (activePanel == .layout) ? nil : .layout }) {
+                BottomBarButtonLabel(iconName: "rectangle.grid.2x2", text: "레이아웃")
+                    .foregroundColor(activePanel == .layout ? .accentColor : .primary)
+            }
+            Button(action: { activePanel = (activePanel == .items) ? nil : .items }) {
+                BottomBarButtonLabel(iconName: "checkmark.square.fill", text: "항목")
+                    .foregroundColor(activePanel == .items ? .accentColor : .primary)
+            }
+            
             Button(action: saveCanvas) {
                 BottomBarButtonLabel(iconName: "square.and.arrow.down", text: "저장")
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 8)
         .padding(.top, 12)
         .frame(height: bottomBarHeight)
         .padding(.bottom, geometry.safeAreaInsets.bottom)
@@ -170,7 +198,7 @@ private extension WorkoutDetailView {
                     baseFontSize: configuration.baseFontSize,
                     scaleFactor: scaleFactor,
                     isForSnapshot: false,
-                    textColorValue: $configuration.textColorValue,
+                    textColor: $configuration.textColor,
                     showDistance: $configuration.showDistance,
                     showDuration: $configuration.showDuration,
                     showPace: $configuration.showPace,
@@ -207,7 +235,7 @@ private extension WorkoutDetailView {
                 switch content {
                 case .iconAndText(let iconName, let text):
                     Image(systemName: iconName).font(.title3)
-                    Text(text).font(.caption)
+                    Text(text).font(.system(size: 10))
                 case .customImage(let imageName):
                     Image(imageName).resizable().scaledToFit().frame(height: 24)
                 }
@@ -216,26 +244,23 @@ private extension WorkoutDetailView {
         }
     }
 
-    // ✅ [최종 수정] 투명 배경 이미지 저장을 위해 임시 파일을 사용하는 방식으로 변경
     func saveCanvas() {
         statusMessage = "이미지 생성 중..."
         errorMessage = nil
         
-        // 1. 저장할 이미지의 크기와 스케일 팩터 설정
         let designWidth: CGFloat = 350.0
         let exportWidth: CGFloat = 1080.0
         let exportHeight = exportWidth / configuration.aspectRatio.ratio
         let exportSize = CGSize(width: exportWidth, height: exportHeight)
         let exportScaleFactor = exportWidth / designWidth
         
-        // 2. 렌더링할 CanvasView 생성
         let viewToSnapshot = CanvasView(
             workout: workout, useImageBackground: configuration.useImageBackground,
             backgroundColor: configuration.backgroundColor, backgroundImage: configuration.backgroundImage,
             aspectRatio: configuration.aspectRatio.ratio, textAlignment: configuration.textAlignment.horizontalAlignment,
             workoutType: workoutType, selectedFontName: configuration.fontName, baseFontSize: configuration.baseFontSize,
             scaleFactor: exportScaleFactor, isForSnapshot: true,
-            textColorValue: .constant(configuration.textColorValue),
+            textColor: .constant(configuration.textColor),
             showDistance: .constant(configuration.showDistance),
             showDuration: .constant(configuration.showDuration),
             showPace: .constant(configuration.showPace),
@@ -249,24 +274,20 @@ private extension WorkoutDetailView {
             rotationAngle: .constant(configuration.rotationAngle)
         )
 
-        // 3. 뷰를 UIImage로 캡처
         guard let image = viewToSnapshot.snapshot(size: exportSize) else {
             DispatchQueue.main.async { self.statusMessage = "이미지 생성 실패" }
             return
         }
 
-        // 4. UIImage를 PNG 데이터로 변환 (투명도 유지를 위해 필수)
         guard let pngData = image.pngData() else {
             DispatchQueue.main.async { self.statusMessage = "PNG 데이터 변환 실패" }
             return
         }
 
-        // 5. PNG 데이터를 저장할 임시 파일 경로 생성
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("png")
 
-        // 6. PNG 데이터를 임시 파일로 디스크에 저장
         do {
             try pngData.write(to: tempURL)
         } catch {
@@ -276,20 +297,15 @@ private extension WorkoutDetailView {
             return
         }
 
-        // 7. 사진 앨범 접근 권한 요청
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            // 권한 처리 후 임시 파일을 정리하기 위해 URL을 캡처
             let capturedTempURL = tempURL
             
             DispatchQueue.main.async {
                 switch status {
                 case .authorized, .limited:
-                    // 8. 사진 앨범에 저장
                     PHPhotoLibrary.shared().performChanges({
-                        // UIImage 객체 대신, 임시 파일 URL을 사용하여 저장 요청
                         PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: capturedTempURL)
                     }) { success, error in
-                        // 9. 작업 완료 후 임시 파일 삭제 (성공/실패 무관)
                         try? FileManager.default.removeItem(at: capturedTempURL)
                         
                         DispatchQueue.main.async {
@@ -301,7 +317,6 @@ private extension WorkoutDetailView {
                         }
                     }
                 default:
-                    // 10. 권한이 없는 경우에도 임시 파일 삭제
                     try? FileManager.default.removeItem(at: capturedTempURL)
                     self.statusMessage = "사진첩 접근 권한이 없습니다."
                 }

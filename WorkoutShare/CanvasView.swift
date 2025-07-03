@@ -14,7 +14,8 @@ struct CanvasView: View {
     let scaleFactor: CGFloat
     let isForSnapshot: Bool
     
-    @Binding var textColorValue: CGFloat
+    // ✅ [수정] textColorValue를 textColor로 변경
+    @Binding var textColor: Color
     @Binding var showDistance: Bool
     @Binding var showDuration: Bool
     @Binding var showPace: Bool
@@ -33,11 +34,12 @@ struct CanvasView: View {
     private let baseLabelFootnoteSize: CGFloat = 13.0
     private let baseLabelCaptionSize: CGFloat = 12.0
 
+    // ✅ [수정] Initializer 변경
     init(
         workout: StravaWorkout, useImageBackground: Bool, backgroundColor: Color,
         backgroundImage: UIImage?, aspectRatio: CGFloat, textAlignment: HorizontalAlignment,
         workoutType: WorkoutType, selectedFontName: String, baseFontSize: CGFloat,
-        scaleFactor: CGFloat, isForSnapshot: Bool = false, textColorValue: Binding<CGFloat>,
+        scaleFactor: CGFloat, isForSnapshot: Bool = false, textColor: Binding<Color>,
         showDistance: Binding<Bool>, showDuration: Binding<Bool>, showPace: Binding<Bool>,
         showSpeed: Binding<Bool>, showElevation: Binding<Bool>, showLabels: Binding<Bool>,
         layoutDirection: Binding<LayoutDirectionOption>, showTitle: Binding<Bool>,
@@ -54,7 +56,7 @@ struct CanvasView: View {
         self.baseFontSize = baseFontSize
         self.scaleFactor = scaleFactor
         self.isForSnapshot = isForSnapshot
-        self._textColorValue = textColorValue
+        self._textColor = textColor
         self._showDistance = showDistance
         self._showDuration = showDuration
         self._showPace = showPace
@@ -146,8 +148,10 @@ struct CanvasView: View {
     }
 
     var body: some View {
-        let primaryColor = Color(white: textColorValue)
+        // ✅ [수정] textColorValue 대신 textColor를 직접 사용
+        let primaryColor = textColor
         let secondaryColor = primaryColor.opacity(0.8)
+        
         ZStack(alignment: .center) {
             if useImageBackground, let image = backgroundImage {
                 Image(uiImage: image).resizable().scaledToFill()
@@ -205,8 +209,10 @@ struct CanvasView: View {
 
     @ViewBuilder
     private var workoutInfoItems: some View {
-        let primaryColor = Color(white: textColorValue)
+        // ✅ [수정] textColorValue 대신 textColor를 직접 사용
+        let primaryColor = textColor
         let secondaryColor = primaryColor.opacity(0.8)
+        
         if showDistance && workout.distance > 0 {
             VStack(alignment: textAlignment, spacing: 0) {
                 if showLabels { Text("거리").font(applyFont(baseSize: baseLabelCaptionSize * 0.9)).foregroundColor(secondaryColor) }

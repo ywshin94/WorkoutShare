@@ -12,7 +12,8 @@ struct CanvasConfiguration {
     var textAlignment: TextAlignmentOption = .left
     var fontName: String = "Futura-Bold"
     var baseFontSize: CGFloat = 13.0
-    var textColorValue: CGFloat = 1.0 // ✅ 텍스트 색상 값 (1.0: 흰색, 0.0: 검은색)
+    // ✅ [수정] textColorValue(CGFloat)를 textColor(Color)로 변경하고 기본값을 .white로 설정
+    var textColor: Color = .white
     
     // 레이아웃 및 위치/회전 설정
     var layoutDirection: LayoutDirectionOption = .vertical
