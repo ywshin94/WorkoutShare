@@ -27,8 +27,13 @@ extension View {
         view.layoutIfNeeded()
 
         // 2. 애플의 고수준 이미지 렌더링 API를 사용합니다.
-        // 이 렌더러는 레티나 스케일, 좌표계 등을 자동으로 처리합니다.
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // UIGraphicsImageRendererFormat을 생성하여 투명도(opaque) 옵션을 설정합니다.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale // 레티나 디스플레이 지원을 위해 스케일 유지
+        format.opaque = false // 👈 이 부분이 "false"여야 투명한 배경이 유지됩니다.
+        
+        // 설정한 format으로 렌더러를 초기화합니다.
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         
         let image = renderer.image { _ in
             // 3. 화면에 보이는 것과 가장 유사하게 캡처하는 drawHierarchy 메서드를 사용합니다.

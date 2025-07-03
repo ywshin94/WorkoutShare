@@ -216,15 +216,19 @@ private extension WorkoutDetailView {
         }
     }
 
-    // ✅ [수정] 생략되었던 saveCanvas 함수의 내용을 모두 포함합니다.
+    // ✅ [최종 수정] 투명 배경 이미지 저장을 위해 임시 파일을 사용하는 방식으로 변경
     func saveCanvas() {
-        statusMessage = "Rendering..."
+        statusMessage = "이미지 생성 중..."
         errorMessage = nil
+        
+        // 1. 저장할 이미지의 크기와 스케일 팩터 설정
         let designWidth: CGFloat = 350.0
         let exportWidth: CGFloat = 1080.0
         let exportHeight = exportWidth / configuration.aspectRatio.ratio
         let exportSize = CGSize(width: exportWidth, height: exportHeight)
         let exportScaleFactor = exportWidth / designWidth
+        
+        // 2. 렌더링할 CanvasView 생성
         let viewToSnapshot = CanvasView(
             workout: workout, useImageBackground: configuration.useImageBackground,
             backgroundColor: configuration.backgroundColor, backgroundImage: configuration.backgroundImage,
@@ -244,23 +248,61 @@ private extension WorkoutDetailView {
             accumulatedOffset: .constant(configuration.accumulatedOffset),
             rotationAngle: .constant(configuration.rotationAngle)
         )
+
+        // 3. 뷰를 UIImage로 캡처
         guard let image = viewToSnapshot.snapshot(size: exportSize) else {
             DispatchQueue.main.async { self.statusMessage = "이미지 생성 실패" }
             return
         }
+
+        // 4. UIImage를 PNG 데이터로 변환 (투명도 유지를 위해 필수)
+        guard let pngData = image.pngData() else {
+            DispatchQueue.main.async { self.statusMessage = "PNG 데이터 변환 실패" }
+            return
+        }
+
+        // 5. PNG 데이터를 저장할 임시 파일 경로 생성
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("png")
+
+        // 6. PNG 데이터를 임시 파일로 디스크에 저장
+        do {
+            try pngData.write(to: tempURL)
+        } catch {
+            DispatchQueue.main.async {
+                self.statusMessage = "임시 파일 저장 실패: \(error.localizedDescription)"
+            }
+            return
+        }
+
+        // 7. 사진 앨범 접근 권한 요청
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            // 권한 처리 후 임시 파일을 정리하기 위해 URL을 캡처
+            let capturedTempURL = tempURL
+            
             DispatchQueue.main.async {
                 switch status {
                 case .authorized, .limited:
+                    // 8. 사진 앨범에 저장
                     PHPhotoLibrary.shared().performChanges({
-                        PHAssetChangeRequest.creationRequestForAsset(from: image)
+                        // UIImage 객체 대신, 임시 파일 URL을 사용하여 저장 요청
+                        PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: capturedTempURL)
                     }) { success, error in
+                        // 9. 작업 완료 후 임시 파일 삭제 (성공/실패 무관)
+                        try? FileManager.default.removeItem(at: capturedTempURL)
+                        
                         DispatchQueue.main.async {
-                            if success { self.statusMessage = "저장 완료!" }
-                            else { self.statusMessage = "저장 실패: \(error?.localizedDescription ?? "알 수 없는 오류")" }
+                            if success {
+                                self.statusMessage = "사진 앨범에 저장 완료!"
+                            } else {
+                                self.statusMessage = "저장 실패: \(error?.localizedDescription ?? "알 수 없는 오류")"
+                            }
                         }
                     }
                 default:
+                    // 10. 권한이 없는 경우에도 임시 파일 삭제
+                    try? FileManager.default.removeItem(at: capturedTempURL)
                     self.statusMessage = "사진첩 접근 권한이 없습니다."
                 }
             }
