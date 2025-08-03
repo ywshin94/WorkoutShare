@@ -4,9 +4,15 @@ import SwiftUI
 struct WorkoutShareApp: App {
     @StateObject private var stravaService = StravaService()
 
+    init() {
+        // ✅ 앱 최초 실행 시 기본값 등록
+        UserDefaults.standard.register(defaults: [
+            "userDidDeauthorize": true
+        ])
+    }
+
     var body: some Scene {
         WindowGroup {
-            // ✅ [수정] 앱의 첫 시작점을 AppEntryView로 변경합니다.
             AppEntryView()
                 .environmentObject(stravaService)
                 .onOpenURL { url in
@@ -25,3 +31,4 @@ struct WorkoutShareApp: App {
         }
     }
 }
+

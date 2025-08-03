@@ -1,39 +1,95 @@
 import Foundation
 import UIKit
+import AuthenticationServices
 
-class StravaService: ObservableObject {
+class StravaService: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     private let clientId = "102274"
-    private let clientSecret = "ffe243278147663c88dddc2625b61fdf5a47953a" // 보안 주의
+    private let clientSecret = "ffe243278147663c88dddc2625b61fdf5a47953a"
     private let redirectUri = "https://ywshin94.mycafe24.com/oauth"
     private let stravaAuthorizeUrl = "https://www.strava.com/oauth/authorize"
     private let stravaTokenUrl = "https://www.strava.com/oauth/token"
     private let stravaActivitiesUrl = "https://www.strava.com/api/v3/athlete/activities"
     private let stravaDeauthorizeUrl = "https://www.strava.com/oauth/deauthorize"
 
+    private let accessTokenKey = "accessToken"
+    private var authSession: ASWebAuthenticationSession?
+
     @Published var accessToken: String?
     @Published var workouts: [StravaWorkout] = []
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
+
+    override init() {
+        super.init()
+        if let token = UserDefaults.standard.string(forKey: accessTokenKey), !token.isEmpty {
+            self.accessToken = token
+        }
+    }
     
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        return scene?.windows.first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
+    }
+
+    @MainActor
     func startOAuthFlow() {
-        let scope = "activity:read_all"
         var components = URLComponents(string: stravaAuthorizeUrl)!
         components.queryItems = [
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectUri),
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "approval_prompt", value: "auto"),
-            URLQueryItem(name: "scope", value: scope)
+            URLQueryItem(name: "approval_prompt", value: "force"),
+            URLQueryItem(name: "scope", value: "activity:read_all")
         ]
-        if let url = components.url {
-            UIApplication.shared.open(url)
-        } else {
-            DispatchQueue.main.async {
-                self.errorMessage = "Failed to create authorization URL."
+
+        guard let authURL = components.url else {
+            self.errorMessage = "Failed to create authorization URL."
+            return
+        }
+
+        let callbackURLScheme = URL(string: redirectUri)?.scheme
+
+        self.authSession = ASWebAuthenticationSession(
+            url: authURL,
+            callbackURLScheme: callbackURLScheme
+        ) { [weak self] callbackURL, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                // 사용자가 로그인을 취소한 경우(ASWebAuthenticationSessionError.canceledLogin)는 일반적인 상황이므로 에러 메시지를 표시하지 않을 수 있습니다.
+                if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                    print("Login canceled by user.")
+                    return
+                }
+                self.errorMessage = "Authentication failed: \(error.localizedDescription)"
+                return
+            }
+
+            guard let callbackURL = callbackURL,
+                  let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: true),
+                  let codeItem = components.queryItems?.first(where: { $0.name == "code" }),
+                  let code = codeItem.value else {
+                self.errorMessage = "Invalid callback URL."
+                return
+            }
+            
+            Task {
+                do {
+                    try await self.exchangeCodeForToken(code: code)
+                } catch {
+                    // 에러 메시지는 exchangeCodeForToken 내부에서 처리됨
+                }
             }
         }
+        
+        authSession?.presentationContextProvider = self
+        // ✅ [핵심 수정] 이 옵션을 true로 설정하면 기존 사파리 로그인 정보를 공유하지 않습니다.
+        authSession?.prefersEphemeralWebBrowserSession = true
+        
+        authSession?.start()
     }
-
+    
+    // (이하 나머지 코드는 이전과 동일합니다)
     func exchangeCodeForToken(code: String) async throws {
         await MainActor.run { self.isLoading = true; self.errorMessage = nil }
         guard let url = URL(string: stravaTokenUrl) else { throw URLError(.badURL) }
@@ -51,18 +107,18 @@ class StravaService: ObservableObject {
                 }
                 throw NSError(domain: "StravaAuthError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: stravaError])
             }
-            
-            // ✅ [최종 수정] 누락되었던 디코딩 전략을 다시 추가합니다.
+
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            
             let tokenResponse = try decoder.decode(TokenResponse.self, from: data)
-            
+
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
+                UserDefaults.standard.set(tokenResponse.accessToken, forKey: self.accessTokenKey)
                 self.isLoading = false
                 self.errorMessage = nil
             }
+            
             await fetchRecentWorkouts()
         } catch {
             await MainActor.run {
@@ -101,23 +157,29 @@ class StravaService: ObservableObject {
             self.isLoading = false
         }
     }
-    
+
     func deauthorize() async {
-        guard let token = accessToken else { return }
-        guard let url = URL(string: stravaDeauthorizeUrl) else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        let body = "access_token=\(token)"
-        request.httpBody = body.data(using: .utf8)
-        do {
-            _ = try await URLSession.shared.data(for: request)
-        } catch {
-            print("Failed to deauthorize on Strava server: \(error.localizedDescription)")
-        }
+        guard let tokenToDeauthorize = accessToken else { return }
+
         await MainActor.run {
             self.accessToken = nil
             self.workouts = []
             self.errorMessage = nil
+            UserDefaults.standard.removeObject(forKey: self.accessTokenKey)
+            UserDefaults.standard.synchronize()
+        }
+        
+        guard let url = URL(string: stravaDeauthorizeUrl) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let body = "access_token=\(tokenToDeauthorize)"
+        request.httpBody = body.data(using: .utf8)
+        
+        do {
+            _ = try await URLSession.shared.data(for: request)
+            print("Successfully deauthorized token on Strava's server.")
+        } catch {
+            print("Failed to deauthorize on Strava server. Error: \(error.localizedDescription)")
         }
     }
 
@@ -140,7 +202,6 @@ class StravaService: ObservableObject {
     }
 }
 
-// ✅ [최종 수정] 원래의 완전한 형태로 복원합니다.
 struct TokenResponse: Codable {
     let tokenType: String?
     let expiresAt: Int?
